@@ -29,7 +29,9 @@
 
 include "system/inclrtl"
 
-import net, strutils, parseutils, times, asyncdispatch, asyncnet, os
+import net, strutils, parseutils, times, asyncdispatch, asyncnet, os, tables
+from rawsockets import TPort
+export `[]`
 
 type
   TIrcBase*[SockType] = object
@@ -47,7 +49,12 @@ type
     msgLimit: bool
     messageBuffer: seq[tuple[timeToSend: float, m: string]]
     lastReconnect: float
+    userList: TTable[string, UserList]
   PIrcBase*[T] = ref TIrcBase[T]
+
+  UserList* = ref object
+    list: seq[string]
+    finished: bool
 
   PIrc* = ref TIrcBase[PSocket]
 
@@ -306,6 +313,23 @@ proc newIrc*(address: string, port: TPort = 6667.TPort,
   result.messageBuffer = @[]
   result.status = SockIdle
   result.sock = newSocket()
+  result.userList = initTable[string, UserList]()
+
+proc remNick(irc: PIrc | PAsyncIrc, chan, nick: string) =
+  ## Removes ``nick`` from ``chan``'s user list.
+  var newList: seq[string] = @[]
+  for n in irc.userList[chan].list:
+    if n != nick:
+      newList.add n
+  irc.userList[chan].list = newList
+
+proc addNick(irc: PIrc | PAsyncIrc, chan, nick: string) =
+  ## Adds ``nick`` to ``chan``'s user list.
+  var stripped = nick
+  # Strip +/@
+  if nick[0] in {'+', '@'}: stripped = nick[1 .. <nick.len]
+
+  irc.userList[chan].list.add(stripped)
 
 proc processLine(irc: PIrc | PAsyncIrc, line: string): TIRCEvent =
   if line.len == 0:
@@ -326,15 +350,53 @@ proc processLine(irc: PIrc | PAsyncIrc, line: string): TIRCEvent =
     if result.cmd == MPong:
       irc.lag = epochTime() - parseFloat(result.params[result.params.high])
       irc.lastPong = epochTime()
+
     if result.cmd == MNumeric:
-      if result.numeric == "001":
+      case result.numeric
+      of "001":
         # Check the nickname.
         if irc.nick != result.params[0]:
           assert ' ' notin result.params[0]
           irc.nick = result.params[0]
+      of "353":
+        let chan = result.params[2]
+        if not irc.userList.hasKey(chan):
+          irc.userList[chan] = UserList(finished: false, list: @[])
+        if irc.userList[chan].finished:
+          irc.userList[chan].finished = false
+          irc.userList[chan].list = @[]
+        for i in result.params[3].split(' '):
+          addNick(irc, chan, i)
+      of "366":
+        let chan = result.params[1]
+        assert irc.userList.hasKey(chan)
+        irc.userList[chan].finished = true
+
     if result.cmd == MNick:
       if result.nick == irc.nick:
         irc.nick = result.params[0]
+
+      # Update user list.
+      for chan in keys(irc.userList):
+        irc.remNick(chan, result.nick)
+        irc.addNick(chan, result.params[0])
+
+    if result.cmd == MJoin:
+      if irc.userList.hasKey(result.origin):
+        addNick(irc, result.origin, result.nick)
+
+    if result.cmd == MPart:
+      remNick(irc, result.origin, result.nick)
+      if result.nick == irc.nick:
+        irc.userList.del(result.origin)
+
+    if result.cmd == MKick:
+      remNick(irc, result.origin, result.params[1])
+
+    if result.cmd == MQuit:
+      # Update user list.
+      for chan in keys(irc.userList):
+        irc.remNick(chan, result.nick)
 
 proc replyToLine(irc: PIrc, ev: TIrcEvent) =
   if ev.cmd == MPing:
@@ -438,6 +500,11 @@ proc getNick*(irc: PIrc | PAsyncIrc): string =
   ## Returns the current nickname of the client.
   return irc.nick
 
+proc getUserList*(irc: PIrc | PAsyncIrc, channel: string): seq[string] =
+  ## Returns the specified channel's user list. The specified channel should
+  ## be in the form of ``#chan``.
+  return irc.userList[channel].list
+
 # -- Asyncio dispatcher
 
 proc connect*(irc: PAsyncIRC) {.async.} =
@@ -499,6 +566,7 @@ proc newAsyncIrc*(address: string, port: TPort = 6667.TPort,
   result.handleEvent = callback
   result.sock = newAsyncSocket()
   result.status = SockIdle
+  result.userList = initTable[string, UserList]()
 
 proc run*(irc: PAsyncIrc) {.async.} =
   ## Initiates the long-running event loop.

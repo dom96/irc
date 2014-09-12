@@ -15,7 +15,9 @@ proc onIrcEvent(client: PAsyncIrc, event: TIrcEvent) {.async.} =
       if msg == "!excessFlood":
         for i in 0..10:
           await client.privmsg(event.origin, "TEST" & $i)
-    
+      if msg == "!users":
+        await client.privmsg(event.origin, "Users: " &
+            client.getUserList(event.origin).join("A-A"))
     echo(event.raw)
 
 var client = newAsyncIrc("hobana.freenode.net", nick="TestBot1234",
