@@ -399,24 +399,26 @@ proc processLine(irc: PIrc | PAsyncIrc, line: string): TIRCEvent =
         irc.remNick(chan, result.nick)
 
 proc replyToLine(irc: PIrc, ev: TIrcEvent) =
-  if ev.cmd == MPing:
-    irc.send("PONG " & ev.params[0])
-  
-  if ev.cmd == MNumeric:
-    if ev.numeric == "001":
-      # Join channels.
-      for chan in items(irc.channelsToJoin):
-        irc.join(chan)
+  if ev.typ == EvMsg:
+    if ev.cmd == MPing:
+      irc.send("PONG " & ev.params[0])
+    
+    if ev.cmd == MNumeric:
+      if ev.numeric == "001":
+        # Join channels.
+        for chan in items(irc.channelsToJoin):
+          irc.join(chan)
 
 proc replyToLine(irc: PAsyncIrc, ev: TIrcEvent) {.async.} =
-  if ev.cmd == MPing:
-    await irc.send("PONG " & ev.params[0])
-  
-  if ev.cmd == MNumeric:
-    if ev.numeric == "001":
-      # Join channels.
-      for chan in items(irc.channelsToJoin):
-        await irc.join(chan)
+  if ev.typ == EvMsg:
+    if ev.cmd == MPing:
+      await irc.send("PONG " & ev.params[0])
+    
+    if ev.cmd == MNumeric:
+      if ev.numeric == "001":
+        # Join channels.
+        for chan in items(irc.channelsToJoin):
+          await irc.join(chan)
 
 proc processOther(irc: PIRC, ev: var TIRCEvent): bool =
   result = false
