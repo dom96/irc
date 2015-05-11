@@ -326,8 +326,8 @@ proc remNick(irc: PIrc | PAsyncIrc, chan, nick: string) =
 proc addNick(irc: PIrc | PAsyncIrc, chan, nick: string) =
   ## Adds ``nick`` to ``chan``'s user list.
   var stripped = nick
-  # Strip +/@
-  if nick[0] in {'+', '@'}: stripped = nick[1 .. <nick.len]
+  # Strip common nick prefixes
+  if nick[0] in {'+', '@', '%', '!', '&', '~'}: stripped = nick[1 .. <nick.len]
 
   irc.userList[chan].list.add(stripped)
 
