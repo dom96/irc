@@ -30,17 +30,17 @@
 include "system/inclrtl"
 
 import net, strutils, parseutils, times, asyncdispatch, asyncnet, os, tables
-from rawsockets import TPort
+from rawsockets import Port
 export `[]`
 
 type
   TIrcBase*[SockType] = object
     address: string
-    port: TPort
+    port: Port
     nick, user, realname, serverPass: string
     sock: SockType
-    when SockType is PAsyncSocket:
-      handleEvent: proc (irc: PAsyncIRC, ev: TIRCEvent): PFuture[void]
+    when SockType is AsyncSocket:
+      handleEvent: proc (irc: PAsyncIRC, ev: TIRCEvent): Future[void]
     status: TInfo
     lastPing: float
     lastPong: float
@@ -49,16 +49,16 @@ type
     msgLimit: bool
     messageBuffer: seq[tuple[timeToSend: float, m: string]]
     lastReconnect: float
-    userList: TTable[string, UserList]
+    userList: Table[string, UserList]
   PIrcBase*[T] = ref TIrcBase[T]
 
   UserList* = ref object
     list: seq[string]
     finished: bool
 
-  PIrc* = ref TIrcBase[PSocket]
+  PIrc* = ref TIrcBase[Socket]
 
-  PAsyncIrc* = ref TIrcBase[PAsyncSocket]
+  PAsyncIrc* = ref TIrcBase[AsyncSocket]
 
   TIrcMType* = enum
     MUnknown,
@@ -99,7 +99,7 @@ type
       params*: seq[string] ## Parameters of the IRC message
       origin*: string      ## The channel/user that this msg originated from
       raw*: string         ## Raw IRC message
-      timestamp*: TTime    ## UNIX epoch time the message was received
+      timestamp*: Time     ## UNIX epoch time the message was received
 
   TInfo = enum
     SockConnected, SockConnecting, SockIdle, SockClosed
@@ -127,7 +127,7 @@ proc send*(irc: PIRC, message: string, sendImmediately = false) =
     irc.sock.send(message & "\c\L")
 
 proc send*(irc: PAsyncIrc, message: string,
-           sendImmediately = false): PFuture[void] =
+           sendImmediately = false): Future[void] =
   ## Sends ``message`` as a raw command asynchronously. It adds ``\c\L`` for 
   ## you.
   ##
@@ -144,7 +144,7 @@ proc privmsg*(irc: PIRC, target, message: string) =
   ## Sends ``message`` to ``target``. ``Target`` can be a channel, or a user.
   irc.send("PRIVMSG $1 :$2" % [target, message])
 
-proc privmsg*(irc: PAsyncIrc, target, message: string): PFuture[void] =
+proc privmsg*(irc: PAsyncIrc, target, message: string): Future[void] =
   ## Sends ``message`` to ``target`` asynchronously. ``Target`` can be a 
   ## channel, or a user.
   result = irc.send("PRIVMSG $1 :$2" % [target, message])
@@ -153,7 +153,7 @@ proc notice*(irc: PIRC, target, message: string) =
   ## Sends ``notice`` to ``target``. ``Target`` can be a channel, or a user. 
   irc.send("NOTICE $1 :$2" % [target, message])
 
-proc notice*(irc: PAsyncIrc, target, message: string): PFuture[void] =
+proc notice*(irc: PAsyncIrc, target, message: string): Future[void] =
   ## Sends ``notice`` to ``target`` asynchronously. ``Target`` can be a
   ## channel, or a user. 
   result = irc.send("NOTICE $1 :$2" % [target, message])
@@ -168,7 +168,7 @@ proc join*(irc: PIRC, channel: string, key = "") =
   else:
     irc.send("JOIN " & channel & " " & key)
 
-proc join*(irc: PAsyncIrc, channel: string, key = ""): PFuture[void] =
+proc join*(irc: PAsyncIrc, channel: string, key = ""): Future[void] =
   ## Joins ``channel`` asynchronously.
   ## 
   ## If key is not ``""``, then channel is assumed to be key protected and this
@@ -182,7 +182,7 @@ proc part*(irc: PIRC, channel, message: string) =
   ## Leaves ``channel`` with ``message``.
   irc.send("PART " & channel & " :" & message)
 
-proc part*(irc: PAsyncIrc, channel, message: string): PFuture[void] =
+proc part*(irc: PAsyncIrc, channel, message: string): Future[void] =
   ## Leaves ``channel`` with ``message`` asynchronously.
   result = irc.send("PART " & channel & " :" & message)
 
@@ -266,7 +266,7 @@ proc parseMessage(msg: string): TIRCEvent =
 proc connect*(irc: PIRC) =
   ## Connects to an IRC server as specified by ``irc``.
   assert(irc.address != "")
-  assert(irc.port != TPort(0))
+  assert(irc.port != Port(0))
   
   irc.sock.connect(irc.address, irc.port)
  
@@ -291,7 +291,7 @@ proc reconnect*(irc: PIRC, timeout = 5000) =
   irc.connect()
   irc.lastReconnect = epochTime()
 
-proc newIrc*(address: string, port: TPort = 6667.TPort,
+proc newIrc*(address: string, port: Port = 6667.Port,
          nick = "NimrodBot",
          user = "NimrodBot",
          realname = "NimrodBot", serverPass = "",
@@ -480,7 +480,7 @@ proc poll*(irc: PIRC, ev: var TIRCEvent,
   var line = TaintedString""
   try:
     irc.sock.readLine(line, timeout)
-  except ETimeout:
+  except TimeoutError:
     result = false
   if result:
     ev = irc.processLine(line.string)
@@ -513,7 +513,7 @@ proc connect*(irc: PAsyncIRC) {.async.} =
   ## Connects to the IRC server as specified by the ``AsyncIrc`` instance passed
   ## to this procedure.
   assert(irc.address != "")
-  assert(irc.port != TPort(0))
+  assert(irc.port != Port(0))
   irc.status = SockConnecting
   
   await irc.sock.connect(irc.address, irc.port)
@@ -538,13 +538,13 @@ proc reconnect*(irc: PAsyncIRC, timeout = 5000) {.async.} =
   await irc.connect()
   irc.lastReconnect = epochTime()
 
-proc newAsyncIrc*(address: string, port: TPort = 6667.TPort,
+proc newAsyncIrc*(address: string, port: Port = 6667.Port,
               nick = "NimrodBot",
               user = "NimrodBot",
               realname = "NimrodBot", serverPass = "",
               joinChans: seq[string] = @[],
               msgLimit: bool = true,
-              callback: proc (irc: PAsyncIRC, ev: TIRCEvent): PFuture[void]
+              callback: proc (irc: PAsyncIRC, ev: TIRCEvent): Future[void]
               ): PAsyncIrc =
   ## Creates a new asynchronous IRC object instance.
   ## 
