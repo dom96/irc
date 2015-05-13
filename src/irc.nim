@@ -1,13 +1,13 @@
 # (c) Copyright 2012 Dominik Picheta
-# Licensed under MIT.       
+# Licensed under MIT.
 
 ## This module implements an asynchronous IRC client.
-## 
+##
 ## Currently this module requires at least some knowledge of the IRC protocol.
 ## It provides a function for sending raw messages to the IRC server, together
-## with some basic functions like sending a message to a channel. 
+## with some basic functions like sending a message to a channel.
 ## It automizes the process of keeping the connection alive, so you don't
-## need to reply to PING messages. In fact, the server is also PING'ed to check 
+## need to reply to PING messages. In fact, the server is also PING'ed to check
 ## the amount of lag.
 ##
 ## .. code-block:: Nimrod
@@ -23,7 +23,7 @@
 ##         client.reconnect()
 ##       of EvMsg:
 ##         # Write your message reading code here.
-## 
+##
 ## **Warning:** The API of this module is unstable, and therefore is subject
 ## to change.
 
@@ -76,7 +76,7 @@ type
     MPing,
     MPong,
     MError
-  
+
   TIrcEventType* = enum
     EvMsg, EvConnected, EvDisconnected, EvTimeout
   TIrcEvent* = object ## IRC Event
@@ -128,7 +128,7 @@ proc send*(irc: PIRC, message: string, sendImmediately = false) =
 
 proc send*(irc: PAsyncIrc, message: string,
            sendImmediately = false): Future[void] =
-  ## Sends ``message`` as a raw command asynchronously. It adds ``\c\L`` for 
+  ## Sends ``message`` as a raw command asynchronously. It adds ``\c\L`` for
   ## you.
   ##
   ## Buffering is performed automatically if you attempt to send messages too
@@ -145,22 +145,22 @@ proc privmsg*(irc: PIRC, target, message: string) =
   irc.send("PRIVMSG $1 :$2" % [target, message])
 
 proc privmsg*(irc: PAsyncIrc, target, message: string): Future[void] =
-  ## Sends ``message`` to ``target`` asynchronously. ``Target`` can be a 
+  ## Sends ``message`` to ``target`` asynchronously. ``Target`` can be a
   ## channel, or a user.
   result = irc.send("PRIVMSG $1 :$2" % [target, message])
 
 proc notice*(irc: PIRC, target, message: string) =
-  ## Sends ``notice`` to ``target``. ``Target`` can be a channel, or a user. 
+  ## Sends ``notice`` to ``target``. ``Target`` can be a channel, or a user.
   irc.send("NOTICE $1 :$2" % [target, message])
 
 proc notice*(irc: PAsyncIrc, target, message: string): Future[void] =
   ## Sends ``notice`` to ``target`` asynchronously. ``Target`` can be a
-  ## channel, or a user. 
+  ## channel, or a user.
   result = irc.send("NOTICE $1 :$2" % [target, message])
 
 proc join*(irc: PIRC, channel: string, key = "") =
   ## Joins ``channel``.
-  ## 
+  ##
   ## If key is not ``""``, then channel is assumed to be key protected and this
   ## function will join the channel using ``key``.
   if key == "":
@@ -170,7 +170,7 @@ proc join*(irc: PIRC, channel: string, key = "") =
 
 proc join*(irc: PAsyncIrc, channel: string, key = ""): Future[void] =
   ## Joins ``channel`` asynchronously.
-  ## 
+  ##
   ## If key is not ``""``, then channel is assumed to be key protected and this
   ## function will join the channel using ``key``.
   if key == "":
@@ -222,7 +222,7 @@ proc parseMessage(msg: string): TIRCEvent =
     else:
       result.serverName = nick
       inc(i) # Skip ` `
-  
+
   # Process command
   var cmd = ""
   i.inc msg.parseUntil(cmd, {' '}, i)
@@ -246,9 +246,9 @@ proc parseMessage(msg: string): TIRCEvent =
     of "NOTICE": result.cmd = MNotice
     of "ERROR": result.cmd = MError
     else: result.cmd = MUnknown
-  
+
   # Don't skip space here. It is skipped in the following While loop.
-  
+
   # Params
   result.params = @[]
   var param = ""
@@ -258,7 +258,7 @@ proc parseMessage(msg: string): TIRCEvent =
     if param != "":
       result.params.add(param)
       param.setlen(0)
-  
+
   if msg[i] == ':':
     inc(i) # Skip `:`.
     result.params.add(msg[i..msg.len-1])
@@ -267,11 +267,11 @@ proc connect*(irc: PIRC) =
   ## Connects to an IRC server as specified by ``irc``.
   assert(irc.address != "")
   assert(irc.port != Port(0))
-  
+
   irc.sock.connect(irc.address, irc.port)
- 
+
   irc.status = SockConnected
-  
+
   # Greet the server :)
   if irc.serverPass != "": irc.send("PASS " & irc.serverPass, true)
   irc.send("NICK " & irc.nick, true)
@@ -402,7 +402,7 @@ proc replyToLine(irc: PIrc, ev: TIrcEvent) =
   if ev.typ == EvMsg:
     if ev.cmd == MPing:
       irc.send("PONG " & ev.params[0])
-    
+
     if ev.cmd == MNumeric:
       if ev.numeric == "001":
         # Join channels.
@@ -413,7 +413,7 @@ proc replyToLine(irc: PAsyncIrc, ev: TIrcEvent) {.async.} =
   if ev.typ == EvMsg:
     if ev.cmd == MPing:
       await irc.send("PONG " & ev.params[0])
-    
+
     if ev.cmd == MNumeric:
       if ev.numeric == "001":
         # Join channels.
@@ -430,7 +430,7 @@ proc processOther(irc: PIRC, ev: var TIRCEvent): bool =
     irc.close()
     ev.typ = EvTimeout
     return true
-  
+
   for i in 0..irc.messageBuffer.len-1:
     if epochTime() >= irc.messageBuffer[0][0]:
       irc.send(irc.messageBuffer[0].m, true)
@@ -452,7 +452,7 @@ proc processOtherForever(irc: PAsyncIRC) {.async.} =
       var ev: TIrcEvent
       ev.typ = EvTimeout
       asyncCheck irc.handleEvent(irc, ev)
-    
+
     for i in 0..irc.messageBuffer.len-1:
       if epochTime() >= irc.messageBuffer[0][0]:
         await irc.send(irc.messageBuffer[0].m, true)
@@ -463,7 +463,7 @@ proc processOtherForever(irc: PAsyncIRC) {.async.} =
 
 proc poll*(irc: PIRC, ev: var TIRCEvent,
            timeout: int = 500): bool =
-  ## This function parses a single message from the IRC server and returns 
+  ## This function parses a single message from the IRC server and returns
   ## a TIRCEvent.
   ##
   ## This function should be called often as it also handles pinging
@@ -490,7 +490,7 @@ proc poll*(irc: PIRC, ev: var TIRCEvent,
 
 proc getLag*(irc: PIrc | PAsyncIrc): float =
   ## Returns the latency between this client and the IRC server in seconds.
-  ## 
+  ##
   ## If latency is unknown, returns -1.0.
   return irc.lag
 
@@ -515,7 +515,7 @@ proc connect*(irc: PAsyncIRC) {.async.} =
   assert(irc.address != "")
   assert(irc.port != Port(0))
   irc.status = SockConnecting
-  
+
   await irc.sock.connect(irc.address, irc.port)
 
   if irc.serverPass != "": await irc.send("PASS " & irc.serverPass, true)
@@ -547,11 +547,11 @@ proc newAsyncIrc*(address: string, port: Port = 6667.Port,
               callback: proc (irc: PAsyncIRC, ev: TIRCEvent): Future[void]
               ): PAsyncIrc =
   ## Creates a new asynchronous IRC object instance.
-  ## 
+  ##
   ## **Note:** Do **NOT** use this if you're writing a simple IRC bot which only
   ## requires one task to be run, i.e. this should not be used if you want a
   ## synchronous IRC client implementation, use ``irc`` for that.
-  
+
   new(result)
   result.address = address
   result.port = port
