@@ -95,7 +95,7 @@ type
     of EvMsg:              ## Message from the server
       cmd*: TIRCMType      ## Command (e.g. PRIVMSG)
       nick*, user*, host*, servername*: string
-      numeric*: string     ## The "numeric" or "verb" of the message
+      numeric*: string     ## Only applies to ``MNumeric``
       params*: seq[string] ## Parameters of the IRC message
       origin*: string      ## The channel/user that this msg originated from
       raw*: string         ## Raw IRC message
@@ -231,7 +231,6 @@ proc parseMessage(msg: string): TIRCEvent =
     result.cmd = MNumeric
     result.numeric = cmd
   else:
-    result.numeric = cmd # Save the verb for downstream
     case cmd
     of "PRIVMSG": result.cmd = MPrivMsg
     of "JOIN": result.cmd = MJoin
