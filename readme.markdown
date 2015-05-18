@@ -2,8 +2,8 @@
 
 This package implements an IRC client.
 
-To install run the following:
+To install using [Nimble](https://github.com/nim-lang/nimble) run the following:
 
 ```
-$ babel install irc
+$ nimble install irc
 ```
