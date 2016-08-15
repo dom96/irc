@@ -15,7 +15,7 @@
 ##   var client = irc("picheta.me", joinChans = @["#bots"])
 ##   client.connect()
 ##   while True:
-##     var event: IRCEvent
+##     var event: IrcEvent
 ##     if client.poll(event):
 ##       case event.typ
 ##       of EvConnected: nil
@@ -34,13 +34,13 @@ from rawsockets import Port
 export `[]`
 
 type
-  IRCBase*[SockType] = object
+  IrcBase*[SockType] = object
     address: string
     port: Port
     nick, user, realname, serverPass: string
     sock: SockType
     when SockType is AsyncSocket:
-      handleEvent: proc (irc: PAsyncIRC, ev: IRCEvent): Future[void]
+      handleEvent: proc (irc: PAsyncIrc, ev: IrcEvent): Future[void]
     status: Info
     lastPing: float
     lastPong: float
@@ -50,17 +50,17 @@ type
     messageBuffer: seq[tuple[timeToSend: float, m: string]]
     lastReconnect: float
     userList: Table[string, UserList]
-  PIRCBase*[T] = ref IRCBase[T]
+  PIrcBase*[T] = ref IrcBase[T]
 
   UserList* = ref object
     list: seq[string]
     finished: bool
 
-  PIRC* = ref IRCBase[Socket]
+  PIrc* = ref IrcBase[Socket]
 
-  PAsyncIRC* = ref IRCBase[AsyncSocket]
+  PAsyncIrc* = ref IrcBase[AsyncSocket]
 
-  IRCMType* = enum
+  IrcMType* = enum
     MUnknown,
     MNumeric,
     MPrivMsg,
@@ -77,10 +77,10 @@ type
     MPong,
     MError
 
-  IRCEventType* = enum
+  IrcEventType* = enum
     EvMsg, EvConnected, EvDisconnected, EvTimeout
-  IRCEvent* = object ## IRC Event
-    case typ*: IRCEventType
+  IrcEvent* = object ## IRC Event
+    case typ*: IrcEventType
     of EvConnected:
       ## Connected to server. This event is fired when the ``001`` numeric
       ## is received from the server. After this event is fired you can
@@ -93,7 +93,7 @@ type
       ## Connection timed out.
       nil
     of EvMsg:              ## Message from the server
-      cmd*: IRCMType      ## Command (e.g. PRIVMSG)
+      cmd*: IrcMType      ## Command (e.g. PRIVMSG)
       nick*, user*, host*, servername*: string
       numeric*: string     ## Only applies to ``MNumeric``
       params*: seq[string] ## Parameters of the IRC message
@@ -104,10 +104,10 @@ type
   Info = enum
     SockConnected, SockConnecting, SockIdle, SockClosed
 
-{.deprecated: [TIRCBase: IRCBase, TIRCMType: IRCMType,
-               TIRCEventType: IRCEventType, TIRCEvent: IRCEvent].}
+{.deprecated: [TIrcBase: IrcBase, TIrcMType: IrcMType,
+               TIrcEventType: IrcEventType, TIrcEvent: IrcEvent].}
 
-proc wasBuffered[T](irc: PIRCBase[T], message: string,
+proc wasBuffered[T](irc: PIrcBase[T], message: string,
                     sendImmediately: bool): bool =
   result = true
   if irc.msgLimit and not sendImmediately:
@@ -118,7 +118,7 @@ proc wasBuffered[T](irc: PIRCBase[T], message: string,
     irc.messageBuffer.add((timeToSend, message))
     result = false
 
-proc send*(irc: PIRC, message: string, sendImmediately = false) =
+proc send*(irc: PIrc, message: string, sendImmediately = false) =
   ## Sends ``message`` as a raw command. It adds ``\c\L`` for you.
   ##
   ## Buffering is performed automatically if you attempt to send messages too
@@ -129,7 +129,7 @@ proc send*(irc: PIRC, message: string, sendImmediately = false) =
     # if the client disconnected.
     irc.sock.send(message & "\c\L")
 
-proc send*(irc: PAsyncIRC, message: string,
+proc send*(irc: PAsyncIrc, message: string,
            sendImmediately = false): Future[void] =
   ## Sends ``message`` as a raw command asynchronously. It adds ``\c\L`` for
   ## you.
@@ -143,25 +143,25 @@ proc send*(irc: PAsyncIRC, message: string,
     result = newFuture[void]("irc.send")
     result.complete()
 
-proc privmsg*(irc: PIRC, target, message: string) =
+proc privmsg*(irc: PIrc, target, message: string) =
   ## Sends ``message`` to ``target``. ``Target`` can be a channel, or a user.
   irc.send("PRIVMSG $1 :$2" % [target, message])
 
-proc privmsg*(irc: PAsyncIRC, target, message: string): Future[void] =
+proc privmsg*(irc: PAsyncIrc, target, message: string): Future[void] =
   ## Sends ``message`` to ``target`` asynchronously. ``Target`` can be a
   ## channel, or a user.
   result = irc.send("PRIVMSG $1 :$2" % [target, message])
 
-proc notice*(irc: PIRC, target, message: string) =
+proc notice*(irc: PIrc, target, message: string) =
   ## Sends ``notice`` to ``target``. ``Target`` can be a channel, or a user.
   irc.send("NOTICE $1 :$2" % [target, message])
 
-proc notice*(irc: PAsyncIRC, target, message: string): Future[void] =
+proc notice*(irc: PAsyncIrc, target, message: string): Future[void] =
   ## Sends ``notice`` to ``target`` asynchronously. ``Target`` can be a
   ## channel, or a user.
   result = irc.send("NOTICE $1 :$2" % [target, message])
 
-proc join*(irc: PIRC, channel: string, key = "") =
+proc join*(irc: PIrc, channel: string, key = "") =
   ## Joins ``channel``.
   ##
   ## If key is not ``""``, then channel is assumed to be key protected and this
@@ -171,7 +171,7 @@ proc join*(irc: PIRC, channel: string, key = "") =
   else:
     irc.send("JOIN " & channel & " " & key)
 
-proc join*(irc: PAsyncIRC, channel: string, key = ""): Future[void] =
+proc join*(irc: PAsyncIrc, channel: string, key = ""): Future[void] =
   ## Joins ``channel`` asynchronously.
   ##
   ## If key is not ``""``, then channel is assumed to be key protected and this
@@ -181,15 +181,15 @@ proc join*(irc: PAsyncIRC, channel: string, key = ""): Future[void] =
   else:
     result = irc.send("JOIN " & channel & " " & key)
 
-proc part*(irc: PIRC, channel, message: string) =
+proc part*(irc: PIrc, channel, message: string) =
   ## Leaves ``channel`` with ``message``.
   irc.send("PART " & channel & " :" & message)
 
-proc part*(irc: PAsyncIRC, channel, message: string): Future[void] =
+proc part*(irc: PAsyncIrc, channel, message: string): Future[void] =
   ## Leaves ``channel`` with ``message`` asynchronously.
   result = irc.send("PART " & channel & " :" & message)
 
-proc close*(irc: PIRC | PAsyncIRC) =
+proc close*(irc: PIrc | PAsyncIrc) =
   ## Closes connection to an IRC server.
   ##
   ## **Warning:** This procedure does not send a ``QUIT`` message to the server.
@@ -202,7 +202,7 @@ proc isNumber(s: string): bool =
   while s[i] in {'0'..'9'}: inc(i)
   result = i == s.len and s.len > 0
 
-proc parseMessage(msg: string): IRCEvent =
+proc parseMessage(msg: string): IrcEvent =
   result.typ       = EvMsg
   result.cmd       = MUnknown
   result.raw       = msg
@@ -266,7 +266,7 @@ proc parseMessage(msg: string): IRCEvent =
     inc(i) # Skip `:`.
     result.params.add(msg[i..msg.len-1])
 
-proc connect*(irc: PIRC) =
+proc connect*(irc: PIrc) =
   ## Connects to an IRC server as specified by ``irc``.
   assert(irc.address != "")
   assert(irc.port != Port(0))
@@ -280,7 +280,7 @@ proc connect*(irc: PIRC) =
   irc.send("NICK " & irc.nick, true)
   irc.send("USER $1 * 0 :$2" % [irc.user, irc.realname], true)
 
-proc reconnect*(irc: PIRC, timeout = 5000) =
+proc reconnect*(irc: PIrc, timeout = 5000) =
   ## Reconnects to an IRC server.
   ##
   ## ``Timeout`` specifies the time to wait in miliseconds between multiple
@@ -294,13 +294,13 @@ proc reconnect*(irc: PIRC, timeout = 5000) =
   irc.connect()
   irc.lastReconnect = epochTime()
 
-proc newIRC*(address: string, port: Port = 6667.Port,
+proc newIrc*(address: string, port: Port = 6667.Port,
          nick = "NimBot",
          user = "NimBot",
          realname = "NimBot", serverPass = "",
          joinChans: seq[string] = @[],
-         msgLimit: bool = true): PIRC =
-  ## Creates a ``TIRC`` object.
+         msgLimit: bool = true): PIrc =
+  ## Creates a ``PIrc`` object.
   new(result)
   result.address = address
   result.port = port
@@ -318,7 +318,7 @@ proc newIRC*(address: string, port: Port = 6667.Port,
   result.sock = newSocket()
   result.userList = initTable[string, UserList]()
 
-proc remNick(irc: PIRC | PAsyncIRC, chan, nick: string) =
+proc remNick(irc: PIrc | PAsyncIrc, chan, nick: string) =
   ## Removes ``nick`` from ``chan``'s user list.
   var newList: seq[string] = @[]
   for n in irc.userList[chan].list:
@@ -326,7 +326,7 @@ proc remNick(irc: PIRC | PAsyncIRC, chan, nick: string) =
       newList.add n
   irc.userList[chan].list = newList
 
-proc addNick(irc: PIRC | PAsyncIRC, chan, nick: string) =
+proc addNick(irc: PIrc | PAsyncIrc, chan, nick: string) =
   ## Adds ``nick`` to ``chan``'s user list.
   var stripped = nick
   # Strip common nick prefixes
@@ -334,7 +334,7 @@ proc addNick(irc: PIRC | PAsyncIRC, chan, nick: string) =
 
   irc.userList[chan].list.add(stripped)
 
-proc processLine(irc: PIRC | PAsyncIRC, line: string): IRCEvent =
+proc processLine(irc: PIrc | PAsyncIrc, line: string): IrcEvent =
   if line.len == 0:
     irc.close()
     result.typ = EvDisconnected
@@ -401,7 +401,7 @@ proc processLine(irc: PIRC | PAsyncIRC, line: string): IRCEvent =
       for chan in keys(irc.userList):
         irc.remNick(chan, result.nick)
 
-proc replyToLine(irc: PIRC, ev: IRCEvent) =
+proc replyToLine(irc: PIrc, ev: IrcEvent) =
   if ev.typ == EvMsg:
     if ev.cmd == MPing:
       irc.send("PONG " & ev.params[0])
@@ -412,7 +412,7 @@ proc replyToLine(irc: PIRC, ev: IRCEvent) =
         for chan in items(irc.channelsToJoin):
           irc.join(chan)
 
-proc replyToLine(irc: PAsyncIRC, ev: IRCEvent) {.async.} =
+proc replyToLine(irc: PAsyncIrc, ev: IrcEvent) {.async.} =
   if ev.typ == EvMsg:
     if ev.cmd == MPing:
       await irc.send("PONG " & ev.params[0])
@@ -423,7 +423,7 @@ proc replyToLine(irc: PAsyncIRC, ev: IRCEvent) {.async.} =
         for chan in items(irc.channelsToJoin):
           await irc.join(chan)
 
-proc processOther(irc: PIRC, ev: var IRCEvent): bool =
+proc processOther(irc: PIrc, ev: var IrcEvent): bool =
   result = false
   if epochTime() - irc.lastPing >= 20.0:
     irc.lastPing = epochTime()
@@ -442,7 +442,7 @@ proc processOther(irc: PIRC, ev: var IRCEvent): bool =
       break # messageBuffer is guaranteed to be from the quickest to the
             # later-est.
 
-proc processOtherForever(irc: PAsyncIRC) {.async.} =
+proc processOtherForever(irc: PAsyncIrc) {.async.} =
   while true:
     # TODO: Consider improving this.
     await sleepAsync(1000)
@@ -452,7 +452,7 @@ proc processOtherForever(irc: PAsyncIRC) {.async.} =
 
     if epochTime() - irc.lastPong >= 120.0 and irc.lastPong != -1.0:
       irc.close()
-      var ev: IRCEvent
+      var ev: IrcEvent
       ev.typ = EvTimeout
       asyncCheck irc.handleEvent(irc, ev)
 
@@ -464,7 +464,7 @@ proc processOtherForever(irc: PAsyncIRC) {.async.} =
         break # messageBuffer is guaranteed to be from the quickest to the
               # later-est.
 
-proc poll*(irc: PIRC, ev: var IRCEvent,
+proc poll*(irc: PIrc, ev: var IrcEvent,
            timeout: int = 500): bool =
   ## This function parses a single message from the IRC server and returns
   ## a IRCEvent.
@@ -491,29 +491,29 @@ proc poll*(irc: PIRC, ev: var IRCEvent,
 
   if processOther(irc, ev): result = true
 
-proc getLag*(irc: PIRC | PAsyncIRC): float =
+proc getLag*(irc: PIrc | PAsyncIrc): float =
   ## Returns the latency between this client and the IRC server in seconds.
   ##
   ## If latency is unknown, returns -1.0.
   return irc.lag
 
-proc isConnected*(irc: PIRC | PAsyncIRC): bool =
+proc isConnected*(irc: PIrc | PAsyncIrc): bool =
   ## Returns whether this IRC client is connected to an IRC server.
   return irc.status == SockConnected
 
-proc getNick*(irc: PIRC | PAsyncIRC): string =
+proc getNick*(irc: PIrc | PAsyncIrc): string =
   ## Returns the current nickname of the client.
   return irc.nick
 
-proc getUserList*(irc: PIRC | PAsyncIRC, channel: string): seq[string] =
+proc getUserList*(irc: PIrc | PAsyncIrc, channel: string): seq[string] =
   ## Returns the specified channel's user list. The specified channel should
   ## be in the form of ``#chan``.
   return irc.userList[channel].list
 
 # -- Asyncio dispatcher
 
-proc connect*(irc: PAsyncIRC) {.async.} =
-  ## Connects to the IRC server as specified by the ``AsyncIRC`` instance passed
+proc connect*(irc: PAsyncIrc) {.async.} =
+  ## Connects to the IRC server as specified by the ``AsyncIrc`` instance passed
   ## to this procedure.
   assert(irc.address != "")
   assert(irc.port != Port(0))
@@ -526,7 +526,7 @@ proc connect*(irc: PAsyncIRC) {.async.} =
   await irc.send("USER $1 * 0 :$2" % [irc.user, irc.realname], true)
   irc.status = SockConnected
 
-proc reconnect*(irc: PAsyncIRC, timeout = 5000) {.async.} =
+proc reconnect*(irc: PAsyncIrc, timeout = 5000) {.async.} =
   ## Reconnects to an IRC server.
   ##
   ## ``Timeout`` specifies the time to wait in miliseconds between multiple
@@ -541,14 +541,14 @@ proc reconnect*(irc: PAsyncIRC, timeout = 5000) {.async.} =
   await irc.connect()
   irc.lastReconnect = epochTime()
 
-proc newAsyncIRC*(address: string, port: Port = 6667.Port,
+proc newAsyncIrc*(address: string, port: Port = 6667.Port,
               nick = "NimBot",
               user = "NimBot",
               realname = "NimBot", serverPass = "",
               joinChans: seq[string] = @[],
               msgLimit: bool = true,
-              callback: proc (irc: PAsyncIRC, ev: IRCEvent): Future[void]
-              ): PAsyncIRC =
+              callback: proc (irc: PAsyncIrc, ev: IrcEvent): Future[void]
+              ): PAsyncIrc =
   ## Creates a new asynchronous IRC object instance.
   ##
   ## **Note:** Do **NOT** use this if you're writing a simple IRC bot which only
@@ -573,7 +573,7 @@ proc newAsyncIRC*(address: string, port: Port = 6667.Port,
   result.status = SockIdle
   result.userList = initTable[string, UserList]()
 
-proc run*(irc: PAsyncIRC) {.async.} =
+proc run*(irc: PAsyncIrc) {.async.} =
   ## Initiates the long-running event loop.
   ##
   ## This asynchronous procedure

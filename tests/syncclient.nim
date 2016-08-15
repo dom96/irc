@@ -1,9 +1,9 @@
 import irc, strutils
-var client = newIRC("irc.freenode.net", nick="TestBot1234",
+var client = newIrc("irc.freenode.net", nick="TestBot1234",
                  joinChans = @["#nim-offtopic"])
 client.connect()
 while true:
-  var event: IRCEvent
+  var event: IrcEvent
   if client.poll(event):
     case event.typ
     of EvConnected:

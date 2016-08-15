@@ -1,6 +1,6 @@
 import irc, asyncdispatch, strutils
 
-proc onIRCEvent(client: PAsyncIRC, event: IRCEvent) {.async.} =
+proc onIrcEvent(client: PAsyncIrc, event: IrcEvent) {.async.} =
   case event.typ
   of EvConnected:
     nil
@@ -20,8 +20,8 @@ proc onIRCEvent(client: PAsyncIRC, event: IRCEvent) {.async.} =
             client.getUserList(event.origin).join("A-A"))
     echo(event.raw)
 
-var client = newAsyncIRC("hobana.freenode.net", nick="TestBot1234",
-                 joinChans = @["#nim-offtopic"], callback = onIRCEvent)
+var client = newAsyncIrc("hobana.freenode.net", nick="TestBot1234",
+                 joinChans = @["#nim-offtopic"], callback = onIrcEvent)
 asyncCheck client.run()
 
 runForever()
