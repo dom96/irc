@@ -1,0 +1,5 @@
+nimcache/
+tests/nimcache/
+tests/asyncclient
+tests/syncclient
+*.exe
