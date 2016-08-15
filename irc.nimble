@@ -6,4 +6,4 @@ description = "IRC client module"
 license = "MIT"
 srcDir = "src"
 [Deps]
-Requires: "nimrod >= 0.9.5"
+Requires: "nim >= 0.9.5"

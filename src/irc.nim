@@ -10,7 +10,7 @@
 ## need to reply to PING messages. In fact, the server is also PING'ed to check
 ## the amount of lag.
 ##
-## .. code-block:: Nimrod
+## .. code-block:: Nim
 ##
 ##   var client = irc("picheta.me", joinChans = @["#bots"])
 ##   client.connect()
@@ -295,9 +295,9 @@ proc reconnect*(irc: PIRC, timeout = 5000) =
   irc.lastReconnect = epochTime()
 
 proc newIRC*(address: string, port: Port = 6667.Port,
-         nick = "NimrodBot",
-         user = "NimrodBot",
-         realname = "NimrodBot", serverPass = "",
+         nick = "NimBot",
+         user = "NimBot",
+         realname = "NimBot", serverPass = "",
          joinChans: seq[string] = @[],
          msgLimit: bool = true): PIRC =
   ## Creates a ``TIRC`` object.
@@ -542,9 +542,9 @@ proc reconnect*(irc: PAsyncIRC, timeout = 5000) {.async.} =
   irc.lastReconnect = epochTime()
 
 proc newAsyncIRC*(address: string, port: Port = 6667.Port,
-              nick = "NimrodBot",
-              user = "NimrodBot",
-              realname = "NimrodBot", serverPass = "",
+              nick = "NimBot",
+              user = "NimBot",
+              realname = "NimBot", serverPass = "",
               joinChans: seq[string] = @[],
               msgLimit: bool = true,
               callback: proc (irc: PAsyncIRC, ev: IRCEvent): Future[void]

@@ -1,6 +1,6 @@
 import irc, strutils
 var client = newIRC("irc.freenode.net", nick="TestBot1234",
-                 joinChans = @["#nimrod-offtopic"])
+                 joinChans = @["#nim-offtopic"])
 client.connect()
 while true:
   var event: IRCEvent

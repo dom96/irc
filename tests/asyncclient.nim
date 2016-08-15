@@ -21,7 +21,7 @@ proc onIRCEvent(client: PAsyncIRC, event: IRCEvent) {.async.} =
     echo(event.raw)
 
 var client = newAsyncIRC("hobana.freenode.net", nick="TestBot1234",
-                 joinChans = @["#nimrod-offtopic"], callback = onIRCEvent)
+                 joinChans = @["#nim-offtopic"], callback = onIRCEvent)
 asyncCheck client.run()
 
 runForever()
