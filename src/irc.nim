@@ -374,6 +374,8 @@ proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
         let chan = result.params[1]
         assert irc.userList.hasKey(chan)
         irc.userList[chan].finished = true
+      else:
+        discard
 
     if result.cmd == MNick:
       if result.nick == irc.nick:
