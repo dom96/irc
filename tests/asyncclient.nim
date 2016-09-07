@@ -1,6 +1,6 @@
 import irc, asyncdispatch, strutils
 
-proc onIrcEvent(client: PAsyncIrc, event: IrcEvent) {.async.} =
+proc onIrcEvent(client: AsyncIrc, event: IrcEvent) {.async.} =
   case event.typ
   of EvConnected:
     nil
