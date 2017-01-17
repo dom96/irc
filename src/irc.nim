@@ -29,7 +29,7 @@
 
 include "system/inclrtl"
 
-import net, strutils, parseutils, times, asyncdispatch, asyncnet, os, tables
+import net, strutils, strtabs, parseutils, times, asyncdispatch, asyncnet, os, tables
 from rawsockets import Port
 export `[]`
 
@@ -92,14 +92,15 @@ type
     of EvTimeout:
       ## Connection timed out.
       nil
-    of EvMsg:              ## Message from the server
-      cmd*: IrcMType      ## Command (e.g. PRIVMSG)
+    of EvMsg:               ## Message from the server
+      cmd*: IrcMType        ## Command (e.g. PRIVMSG)
       nick*, user*, host*, servername*: string
-      numeric*: string     ## Only applies to ``MNumeric``
-      params*: seq[string] ## Parameters of the IRC message
-      origin*: string      ## The channel/user that this msg originated from
-      raw*: string         ## Raw IRC message
-      timestamp*: Time     ## UNIX epoch time the message was received
+      numeric*: string      ## Only applies to ``MNumeric``
+      tags*: StringTableRef ## IRCv3 tags at the start of the message
+      params*: seq[string]  ## Parameters of the IRC message
+      origin*: string       ## The channel/user that this msg originated from
+      raw*: string          ## Raw IRC message
+      timestamp*: Time      ## UNIX epoch time the message was received
 
   Info = enum
     SockConnected, SockConnecting, SockIdle, SockClosed
@@ -205,9 +206,19 @@ proc isNumber(s: string): bool =
 proc parseMessage(msg: string): IrcEvent =
   result.typ       = EvMsg
   result.cmd       = MUnknown
+  result.tags      = newStringTable()  
   result.raw       = msg
   result.timestamp = times.getTime()
   var i = 0
+  # Process the tags
+  if msg[i] == '@':
+    inc(i)
+    var tags = ""
+    i.inc msg.parseUntil(tags, {' '}, i)
+    for tag in tags.split(';'):
+      var pair = tag.split('=') 
+      result.tags[pair[0]] = pair[1]
+    inc(i)
   # Process the prefix
   if msg[i] == ':':
     inc(i) # Skip `:`
