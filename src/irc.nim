@@ -200,7 +200,7 @@ proc close*(irc: Irc | AsyncIrc) =
 proc isNumber(s: string): bool =
   ## Checks if `s` contains only numbers.
   var i = 0
-  while s[i] in {'0'..'9'}: inc(i)
+  while i < s.len and s[i] in {'0'..'9'}: inc(i)
   result = i == s.len and s.len > 0
 
 proc parseMessage(msg: string): IrcEvent =
@@ -266,14 +266,14 @@ proc parseMessage(msg: string): IrcEvent =
   # Params
   result.params = @[]
   var param = ""
-  while msg[i] != '\0' and msg[i] != ':':
+  while i < msg.len and msg[i] != ':':
     inc(i) # Skip ` `.
     i.inc msg.parseUntil(param, {' ', ':', '\0'}, i)
     if param != "":
       result.params.add(param)
       param.setlen(0)
 
-  if msg[i] == ':':
+  if i < msg.len and msg[i] == ':':
     inc(i) # Skip `:`.
     result.params.add(msg[i..msg.len-1])
 
