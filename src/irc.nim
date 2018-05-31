@@ -609,8 +609,11 @@ proc run*(irc: AsyncIrc) {.async.} =
 
   asyncCheck irc.processOtherForever()
   while true:
-    var line = await irc.sock.recvLine()
-    var ev = irc.processLine(line.string)
-    await irc.handleLineEvents(ev)
-    asyncCheck irc.handleEvent(irc, ev)
+    if irc.status == SockConnected:
+      var line = await irc.sock.recvLine()
+      var ev = irc.processLine(line.string)
+      await irc.handleLineEvents(ev)
+      asyncCheck irc.handleEvent(irc, ev)
+    else:
+      await sleepAsync(500)
 
