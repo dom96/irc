@@ -29,7 +29,8 @@
 
 include "system/inclrtl"
 
-import net, strutils, strtabs, parseutils, times, asyncdispatch, asyncnet, os, tables
+import net, strutils, strtabs, parseutils, times, asyncdispatch, asyncnet
+import os, tables, deques
 from rawsockets import Port
 export `[]`
 
@@ -41,6 +42,8 @@ type
     sock: SockType
     when SockType is AsyncSocket:
       handleEvent: proc (irc: AsyncIrc, ev: IrcEvent): Future[void]
+    else:
+      eventsQueue: Deque[IrcEvent]
     status: Info
     lastPing: float
     lastPong: float
@@ -328,6 +331,7 @@ proc newIrc*(address: string, port: Port = 6667.Port,
   result.status = SockIdle
   result.sock = newSocket()
   result.userList = initTable[string, UserList]()
+  result.eventsQueue = initDeque[IrcEvent]()
 
 proc remNick(irc: Irc | AsyncIrc, chan, nick: string) =
   ## Removes ``nick`` from ``chan``'s user list.
@@ -414,18 +418,7 @@ proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
       for chan in keys(irc.userList):
         irc.remNick(chan, result.nick)
 
-proc replyToLine(irc: Irc, ev: IrcEvent) =
-  if ev.typ == EvMsg:
-    if ev.cmd == MPing:
-      irc.send("PONG " & ev.params[0])
-
-    if ev.cmd == MNumeric:
-      if ev.numeric == "001":
-        # Join channels.
-        for chan in items(irc.channelsToJoin):
-          irc.join(chan)
-
-proc replyToLine(irc: AsyncIrc, ev: IrcEvent) {.async.} =
+proc handleLineEvents(irc: Irc | AsyncIrc, ev: IrcEvent) {.multisync.} =
   if ev.typ == EvMsg:
     if ev.cmd == MPing:
       await irc.send("PONG " & ev.params[0])
@@ -435,6 +428,15 @@ proc replyToLine(irc: AsyncIrc, ev: IrcEvent) {.async.} =
         # Join channels.
         for chan in items(irc.channelsToJoin):
           await irc.join(chan)
+
+        # Emit connected event.
+        var ev = IrcEvent(
+          typ: EvConnected
+        )
+        when irc is IRC:
+          irc.eventsQueue.addLast(ev)
+        else:
+          asyncCheck irc.handleEvent(irc, ev)
 
 proc processOther(irc: Irc, ev: var IrcEvent): bool =
   result = false
@@ -486,10 +488,14 @@ proc poll*(irc: Irc, ev: var IrcEvent,
   ## the server.
   ##
   ## This function provides a somewhat asynchronous IRC implementation, although
-  ## it should only be used for simple things for example an IRC bot which does
+  ## it should only be used for simple things, for example an IRC bot which does
   ## not need to be running many time critical tasks in the background. If you
-  ## require this, use the asyncio implementation.
+  ## require this, use the AsyncIrc implementation.
   result = true
+  if irc.eventsQueue.len > 0:
+    ev = irc.eventsQueue.popFirst()
+    return
+
   if not (irc.status == SockConnected):
     # Do not close the socket here, it is already closed!
     ev.typ = EvDisconnected
@@ -500,7 +506,7 @@ proc poll*(irc: Irc, ev: var IrcEvent,
     result = false
   if result:
     ev = irc.processLine(line.string)
-    replyToLine(irc, ev)
+    handleLineEvents(irc, ev)
 
   if processOther(irc, ev): result = true
 
@@ -605,6 +611,6 @@ proc run*(irc: AsyncIrc) {.async.} =
   while true:
     var line = await irc.sock.recvLine()
     var ev = irc.processLine(line.string)
-    await irc.replyToLine(ev)
+    await irc.handleLineEvents(ev)
     asyncCheck irc.handleEvent(irc, ev)
 
