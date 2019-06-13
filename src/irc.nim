@@ -31,7 +31,7 @@ include "system/inclrtl"
 
 import net, strutils, strtabs, parseutils, times, asyncdispatch, asyncnet
 import os, tables, deques
-from rawsockets import Port
+from nativesockets import Port
 export `[]`
 
 type
