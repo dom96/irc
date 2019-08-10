@@ -355,6 +355,10 @@ proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
     result.typ = EvDisconnected
   else:
     result = parseMessage(line)
+    
+    if result.params.len == 0:
+      result.params = @[""]
+    
     # Get the origin
     result.origin = result.params[0]
     if result.origin == irc.nick and
