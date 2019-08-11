@@ -355,6 +355,7 @@ proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
     result.typ = EvDisconnected
   else:
     result = parseMessage(line)
+    
     # Get the origin
     result.origin = result.params[0]
     if result.origin == irc.nick and
@@ -446,7 +447,7 @@ proc processOther(irc: Irc, ev: var IrcEvent): bool =
 
   if epochTime() - irc.lastPong >= 120.0 and irc.lastPong != -1.0:
     irc.close()
-    ev.typ = EvTimeout
+    ev = IrcEvent(typ: EvTimeout)
     return true
 
   for i in 0..irc.messageBuffer.len-1:
@@ -468,7 +469,7 @@ proc processOtherForever(irc: AsyncIrc) {.async.} =
     if epochTime() - irc.lastPong >= 120.0 and irc.lastPong != -1.0:
       irc.close()
       var ev: IrcEvent
-      ev.typ = EvTimeout
+      ev = IrcEvent(typ: EvTimeout)
       asyncCheck irc.handleEvent(irc, ev)
 
     for i in 0..irc.messageBuffer.len-1:
@@ -498,7 +499,7 @@ proc poll*(irc: Irc, ev: var IrcEvent,
 
   if not (irc.status == SockConnected):
     # Do not close the socket here, it is already closed!
-    ev.typ = EvDisconnected
+    ev = IrcEvent(typ: EvDisconnected)
   var line = TaintedString""
   try:
     irc.sock.readLine(line, timeout)
