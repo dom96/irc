@@ -384,7 +384,7 @@ proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
         if irc.userList[chan].finished:
           irc.userList[chan].finished = false
           irc.userList[chan].list = @[]
-        for i in result.params[3].split(' '):
+        for i in result.params[3].splitWhitespace():
           addNick(irc, chan, i)
       of "366":
         let chan = result.params[1]
