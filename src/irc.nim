@@ -207,11 +207,11 @@ proc isNumber(s: string): bool =
   result = i == s.len and s.len > 0
 
 proc parseMessage(msg: string): IrcEvent =
-  result.typ       = EvMsg
-  result.cmd       = MUnknown
-  result.tags      = newStringTable()  
-  result.raw       = msg
-  result.timestamp = times.getTime()
+  result = IrcEvent(typ:       EvMsg,
+                    cmd:       MUnknown,
+                    tags:      newStringTable(),
+                    raw:       msg,
+                    timestamp: times.getTime())
   var i = 0
   # Process the tags
   if msg[i] == '@':
@@ -352,7 +352,7 @@ proc addNick(irc: Irc | AsyncIrc, chan, nick: string) =
 proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
   if line.len == 0:
     irc.close()
-    result.typ = EvDisconnected
+    result = IrcEvent(typ: EvDisconnected)
   else:
     result = parseMessage(line)
     
@@ -363,7 +363,7 @@ proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
 
     if result.cmd == MError:
       irc.close()
-      result.typ = EvDisconnected
+      result = IrcEvent(typ: EvDisconnected)
       return
 
     if result.cmd == MPong:
