@@ -142,8 +142,8 @@ proc send*(irc: AsyncIrc, message: string,
   ## quickly to prevent excessive flooding of the IRC server. You can prevent
   ## buffering by specifying ``True`` for the ``sendImmediately`` param.
   if wasBuffered(irc, message, sendImmediately):
-    if irc.status notin [SockClosed, SockConnecting]:
-      return irc.sock.send(message & "\c\L")
+    assert irc.status notin [SockClosed, SockConnecting]
+    return irc.sock.send(message & "\c\L")
   result = newFuture[void]("irc.send")
   result.complete()
 
@@ -355,6 +355,7 @@ proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
     result = IrcEvent(typ: EvDisconnected)
   else:
     result = parseMessage(line)
+    
     # Get the origin
     result.origin = result.params[0]
     if result.origin == irc.nick and
@@ -383,7 +384,7 @@ proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
         if irc.userList[chan].finished:
           irc.userList[chan].finished = false
           irc.userList[chan].list = @[]
-        for i in result.params[3].split(' '):
+        for i in result.params[3].splitWhitespace():
           addNick(irc, chan, i)
       of "366":
         let chan = result.params[1]
@@ -495,8 +496,7 @@ proc poll*(irc: Irc, ev: var IrcEvent,
 
   if not (irc.status == SockConnected):
     # Do not close the socket here, it is already closed!
-     ev = IrcEvent(typ: EvDisconnected)
-
+    ev = IrcEvent(typ: EvDisconnected)
   var line = TaintedString""
   try:
     irc.sock.readLine(line, timeout)
