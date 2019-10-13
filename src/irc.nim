@@ -142,10 +142,10 @@ proc send*(irc: AsyncIrc, message: string,
   ## quickly to prevent excessive flooding of the IRC server. You can prevent
   ## buffering by specifying ``True`` for the ``sendImmediately`` param.
   if wasBuffered(irc, message, sendImmediately):
-    result = irc.sock.send(message & "\c\L")
-  else:
-    result = newFuture[void]("irc.send")
-    result.complete()
+    assert irc.status notin [SockClosed, SockConnecting]
+    return irc.sock.send(message & "\c\L")
+  result = newFuture[void]("irc.send")
+  result.complete()
 
 proc privmsg*(irc: Irc, target, message: string) =
   ## Sends ``message`` to ``target``. ``Target`` can be a channel, or a user.
@@ -207,9 +207,9 @@ proc isNumber(s: string): bool =
   result = i == s.len and s.len > 0
 
 proc parseMessage(msg: string): IrcEvent =
-  result.typ       = EvMsg
+  result = IrcEvent(typ: EvMsg)
   result.cmd       = MUnknown
-  result.tags      = newStringTable()  
+  result.tags      = newStringTable()
   result.raw       = msg
   result.timestamp = times.getTime()
   var i = 0
@@ -285,8 +285,8 @@ proc connect*(irc: Irc) =
   assert(irc.address != "")
   assert(irc.port != Port(0))
 
+  irc.status = SockConnecting
   irc.sock.connect(irc.address, irc.port)
-
   irc.status = SockConnected
 
   # Greet the server :)
@@ -345,14 +345,14 @@ proc addNick(irc: Irc | AsyncIrc, chan, nick: string) =
   ## Adds ``nick`` to ``chan``'s user list.
   var stripped = nick
   # Strip common nick prefixes
-  if nick[0] in {'+', '@', '%', '!', '&', '~'}: stripped = nick[1 .. <nick.len]
+  if nick[0] in {'+', '@', '%', '!', '&', '~'}: stripped = nick[1 ..< nick.len]
 
   irc.userList[chan].list.add(stripped)
 
 proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
   if line.len == 0:
     irc.close()
-    result.typ = EvDisconnected
+    result = IrcEvent(typ: EvDisconnected)
   else:
     result = parseMessage(line)
     
@@ -363,7 +363,7 @@ proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
 
     if result.cmd == MError:
       irc.close()
-      result.typ = EvDisconnected
+      result = IrcEvent(typ: EvDisconnected)
       return
 
     if result.cmd == MPong:
@@ -431,9 +431,7 @@ proc handleLineEvents(irc: Irc | AsyncIrc, ev: IrcEvent) {.multisync.} =
           await irc.join(chan)
 
         # Emit connected event.
-        var ev = IrcEvent(
-          typ: EvConnected
-        )
+        var ev = IrcEvent(typ: EvConnected)
         when irc is IRC:
           irc.eventsQueue.addLast(ev)
         else:
@@ -468,8 +466,7 @@ proc processOtherForever(irc: AsyncIrc) {.async.} =
 
     if epochTime() - irc.lastPong >= 120.0 and irc.lastPong != -1.0:
       irc.close()
-      var ev: IrcEvent
-      ev = IrcEvent(typ: EvTimeout)
+      var ev = IrcEvent(typ: EvTimeout)
       asyncCheck irc.handleEvent(irc, ev)
 
     for i in 0..irc.messageBuffer.len-1:
@@ -537,14 +534,14 @@ proc connect*(irc: AsyncIrc) {.async.} =
   ## to this procedure.
   assert(irc.address != "")
   assert(irc.port != Port(0))
-  irc.status = SockConnecting
 
+  irc.status = SockConnecting
   await irc.sock.connect(irc.address, irc.port)
+  irc.status = SockConnected
 
   if irc.serverPass != "": await irc.send("PASS " & irc.serverPass, true)
   await irc.send("NICK " & irc.nick, true)
   await irc.send("USER $1 * 0 :$2" % [irc.user, irc.realname], true)
-  irc.status = SockConnected
 
 proc reconnect*(irc: AsyncIrc, timeout = 5000) {.async.} =
   ## Reconnects to an IRC server.
@@ -612,7 +609,7 @@ proc run*(irc: AsyncIrc) {.async.} =
   while true:
     if irc.status == SockConnected:
       var line = await irc.sock.recvLine()
-      var ev = irc.processLine(line.string)
+      var ev = irc.processLine(line)
       await irc.handleLineEvents(ev)
       asyncCheck irc.handleEvent(irc, ev)
     else:
