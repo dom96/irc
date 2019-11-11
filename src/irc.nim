@@ -111,6 +111,18 @@ type
 {.deprecated: [TIrcBase: IrcBaseObj, TIrcMType: IrcMType,
                TIrcEventType: IrcEventType, TIrcEvent: IrcEvent].}
 
+when not defined(ssl):
+  type SSLContext = ref object
+var defaultSslContext {.threadvar.}: SSLContext
+
+proc getDefaultSSL(): SSLContext =
+  result = defaultSslContext
+  when defined(ssl):
+    if result == nil:
+      defaultSslContext = newContext(verifyMode = CVerifyNone)
+      result = defaultSslContext
+      doAssert result != nil, "failure to initialize the SSL context"
+
 proc wasBuffered[T](irc: IrcBase[T], message: string,
                     sendImmediately: bool): bool =
   result = true
@@ -313,7 +325,9 @@ proc newIrc*(address: string, port: Port = 6667.Port,
          user = "NimBot",
          realname = "NimBot", serverPass = "",
          joinChans: seq[string] = @[],
-         msgLimit: bool = true): Irc =
+         msgLimit: bool = true,
+         ssl: bool = false,
+         sslContext = getDefaultSSL()): Irc =
   ## Creates a ``Irc`` object.
   new(result)
   result.address = address
@@ -332,6 +346,14 @@ proc newIrc*(address: string, port: Port = 6667.Port,
   result.sock = newSocket()
   result.userList = initTable[string, UserList]()
   result.eventsQueue = initDeque[IrcEvent]()
+
+  when defined(ssl):
+    if ssl:
+      try:
+        sslContext.wrapSocket(result.sock)
+      except:
+        result.sock.close()
+        raise getCurrentException()
 
 proc remNick(irc: Irc | AsyncIrc, chan, nick: string) =
   ## Removes ``nick`` from ``chan``'s user list.
@@ -564,6 +586,8 @@ proc newAsyncIrc*(address: string, port: Port = 6667.Port,
               realname = "NimBot", serverPass = "",
               joinChans: seq[string] = @[],
               msgLimit: bool = true,
+              ssl: bool = false,
+              sslContext = getDefaultSSL(),
               callback: proc (irc: AsyncIrc, ev: IrcEvent): Future[void]
               ): AsyncIrc =
   ## Creates a new asynchronous IRC object instance.
@@ -589,6 +613,14 @@ proc newAsyncIrc*(address: string, port: Port = 6667.Port,
   result.sock = newAsyncSocket()
   result.status = SockIdle
   result.userList = initTable[string, UserList]()
+
+  when defined(ssl):
+    if ssl:
+      try:
+        sslContext.wrapSocket(result.sock)
+      except:
+        result.sock.close()
+        raise getCurrentException()
 
 proc run*(irc: AsyncIrc) {.async.} =
   ## Initiates the long-running event loop.
