@@ -353,7 +353,7 @@ proc newIrc*(address: string, port: Port = 6667.Port,
         sslContext.wrapSocket(result.sock)
       except:
         result.sock.close()
-        raise getCurrentException()
+        raise
 
 proc remNick(irc: Irc | AsyncIrc, chan, nick: string) =
   ## Removes ``nick`` from ``chan``'s user list.
@@ -620,7 +620,7 @@ proc newAsyncIrc*(address: string, port: Port = 6667.Port,
         sslContext.wrapSocket(result.sock)
       except:
         result.sock.close()
-        raise getCurrentException()
+        raise
 
 proc run*(irc: AsyncIrc) {.async.} =
   ## Initiates the long-running event loop.
