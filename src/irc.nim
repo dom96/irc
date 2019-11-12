@@ -326,7 +326,7 @@ proc newIrc*(address: string, port: Port = 6667.Port,
          realname = "NimBot", serverPass = "",
          joinChans: seq[string] = @[],
          msgLimit: bool = true,
-         ssl: bool = false,
+         useSsl: bool = false,
          sslContext = getDefaultSSL()): Irc =
   ## Creates a ``Irc`` object.
   new(result)
@@ -348,7 +348,7 @@ proc newIrc*(address: string, port: Port = 6667.Port,
   result.eventsQueue = initDeque[IrcEvent]()
 
   when defined(ssl):
-    if ssl:
+    if useSsl:
       try:
         sslContext.wrapSocket(result.sock)
       except:
@@ -586,7 +586,7 @@ proc newAsyncIrc*(address: string, port: Port = 6667.Port,
               realname = "NimBot", serverPass = "",
               joinChans: seq[string] = @[],
               msgLimit: bool = true,
-              ssl: bool = false,
+              useSsl: bool = false,
               sslContext = getDefaultSSL(),
               callback: proc (irc: AsyncIrc, ev: IrcEvent): Future[void]
               ): AsyncIrc =
@@ -615,7 +615,7 @@ proc newAsyncIrc*(address: string, port: Port = 6667.Port,
   result.userList = initTable[string, UserList]()
 
   when defined(ssl):
-    if ssl:
+    if useSsl:
       try:
         sslContext.wrapSocket(result.sock)
       except:
