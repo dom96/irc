@@ -111,6 +111,18 @@ type
 {.deprecated: [TIrcBase: IrcBaseObj, TIrcMType: IrcMType,
                TIrcEventType: IrcEventType, TIrcEvent: IrcEvent].}
 
+when not defined(ssl):
+  type SSLContext = ref object
+var defaultSslContext {.threadvar.}: SSLContext
+
+proc getDefaultSSL(): SSLContext =
+  result = defaultSslContext
+  when defined(ssl):
+    if result == nil:
+      defaultSslContext = newContext(verifyMode = CVerifyNone)
+      result = defaultSslContext
+      doAssert result != nil, "failure to initialize the SSL context"
+
 proc wasBuffered[T](irc: IrcBase[T], message: string,
                     sendImmediately: bool): bool =
   result = true
@@ -142,10 +154,10 @@ proc send*(irc: AsyncIrc, message: string,
   ## quickly to prevent excessive flooding of the IRC server. You can prevent
   ## buffering by specifying ``True`` for the ``sendImmediately`` param.
   if wasBuffered(irc, message, sendImmediately):
-    result = irc.sock.send(message & "\c\L")
-  else:
-    result = newFuture[void]("irc.send")
-    result.complete()
+    assert irc.status notin [SockClosed, SockConnecting]
+    return irc.sock.send(message & "\c\L")
+  result = newFuture[void]("irc.send")
+  result.complete()
 
 proc privmsg*(irc: Irc, target, message: string) =
   ## Sends ``message`` to ``target``. ``Target`` can be a channel, or a user.
@@ -207,7 +219,7 @@ proc isNumber(s: string): bool =
   result = i == s.len and s.len > 0
 
 proc parseMessage(msg: string): IrcEvent =
-  result.typ       = EvMsg
+  result = IrcEvent(typ: EvMsg)
   result.cmd       = MUnknown
   result.tags      = newStringTable()
   result.raw       = msg
@@ -285,8 +297,8 @@ proc connect*(irc: Irc) =
   assert(irc.address != "")
   assert(irc.port != Port(0))
 
+  irc.status = SockConnecting
   irc.sock.connect(irc.address, irc.port)
-
   irc.status = SockConnected
 
   # Greet the server :)
@@ -313,7 +325,9 @@ proc newIrc*(address: string, port: Port = 6667.Port,
          user = "NimBot",
          realname = "NimBot", serverPass = "",
          joinChans: seq[string] = @[],
-         msgLimit: bool = true): Irc =
+         msgLimit: bool = true,
+         ssl: bool = false,
+         sslContext = getDefaultSSL()): Irc =
   ## Creates a ``Irc`` object.
   new(result)
   result.address = address
@@ -332,6 +346,14 @@ proc newIrc*(address: string, port: Port = 6667.Port,
   result.sock = newSocket()
   result.userList = initTable[string, UserList]()
   result.eventsQueue = initDeque[IrcEvent]()
+
+  when defined(ssl):
+    if ssl:
+      try:
+        sslContext.wrapSocket(result.sock)
+      except:
+        result.sock.close()
+        raise getCurrentException()
 
 proc remNick(irc: Irc | AsyncIrc, chan, nick: string) =
   ## Removes ``nick`` from ``chan``'s user list.
@@ -355,9 +377,10 @@ proc addNick(irc: Irc | AsyncIrc, chan, nick: string) =
 proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
   if line.len == 0:
     irc.close()
-    result.typ = EvDisconnected
+    result = IrcEvent(typ: EvDisconnected)
   else:
     result = parseMessage(line)
+    
     # Get the origin
     result.origin = result.params[0]
     if result.origin == irc.nick and
@@ -365,7 +388,7 @@ proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
 
     if result.cmd == MError:
       irc.close()
-      result.typ = EvDisconnected
+      result = IrcEvent(typ: EvDisconnected)
       return
 
     if result.cmd == MPong:
@@ -386,7 +409,7 @@ proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
         if irc.userList[chan].finished:
           irc.userList[chan].finished = false
           irc.userList[chan].list = @[]
-        for i in result.params[3].split(' '):
+        for i in result.params[3].splitWhitespace():
           addNick(irc, chan, i)
       of "366":
         let chan = result.params[1]
@@ -433,9 +456,7 @@ proc handleLineEvents(irc: Irc | AsyncIrc, ev: IrcEvent) {.multisync.} =
           await irc.join(chan)
 
         # Emit connected event.
-        var ev = IrcEvent(
-          typ: EvConnected
-        )
+        var ev = IrcEvent(typ: EvConnected)
         when irc is IRC:
           irc.eventsQueue.addLast(ev)
         else:
@@ -449,7 +470,7 @@ proc processOther(irc: Irc, ev: var IrcEvent): bool =
 
   if epochTime() - irc.lastPong >= 120.0 and irc.lastPong != -1.0:
     irc.close()
-    ev.typ = EvTimeout
+    ev = IrcEvent(typ: EvTimeout)
     return true
 
   for i in 0..irc.messageBuffer.len-1:
@@ -470,8 +491,7 @@ proc processOtherForever(irc: AsyncIrc) {.async.} =
 
     if epochTime() - irc.lastPong >= 120.0 and irc.lastPong != -1.0:
       irc.close()
-      var ev: IrcEvent
-      ev.typ = EvTimeout
+      var ev = IrcEvent(typ: EvTimeout)
       asyncCheck irc.handleEvent(irc, ev)
 
     for i in 0..irc.messageBuffer.len-1:
@@ -501,7 +521,7 @@ proc poll*(irc: Irc, ev: var IrcEvent,
 
   if not (irc.status == SockConnected):
     # Do not close the socket here, it is already closed!
-    ev.typ = EvDisconnected
+    ev = IrcEvent(typ: EvDisconnected)
   var line = TaintedString""
   try:
     irc.sock.readLine(line, timeout)
@@ -540,14 +560,14 @@ proc connect*(irc: AsyncIrc) {.async.} =
   ## to this procedure.
   assert(irc.address != "")
   assert(irc.port != Port(0))
-  irc.status = SockConnecting
 
+  irc.status = SockConnecting
   await irc.sock.connect(irc.address, irc.port)
+  irc.status = SockConnected
 
   if irc.serverPass != "": await irc.send("PASS " & irc.serverPass, true)
   await irc.send("NICK " & irc.nick, true)
   await irc.send("USER $1 * 0 :$2" % [irc.user, irc.realname], true)
-  irc.status = SockConnected
 
 proc reconnect*(irc: AsyncIrc, timeout = 5000) {.async.} =
   ## Reconnects to an IRC server.
@@ -570,6 +590,8 @@ proc newAsyncIrc*(address: string, port: Port = 6667.Port,
               realname = "NimBot", serverPass = "",
               joinChans: seq[string] = @[],
               msgLimit: bool = true,
+              ssl: bool = false,
+              sslContext = getDefaultSSL(),
               callback: proc (irc: AsyncIrc, ev: IrcEvent): Future[void]
               ): AsyncIrc =
   ## Creates a new asynchronous IRC object instance.
@@ -596,6 +618,14 @@ proc newAsyncIrc*(address: string, port: Port = 6667.Port,
   result.status = SockIdle
   result.userList = initTable[string, UserList]()
 
+  when defined(ssl):
+    if ssl:
+      try:
+        sslContext.wrapSocket(result.sock)
+      except:
+        result.sock.close()
+        raise getCurrentException()
+
 proc run*(irc: AsyncIrc) {.async.} =
   ## Initiates the long-running event loop.
   ##
@@ -615,7 +645,7 @@ proc run*(irc: AsyncIrc) {.async.} =
   while true:
     if irc.status == SockConnected:
       var line = await irc.sock.recvLine()
-      var ev = irc.processLine(line.string)
+      var ev = irc.processLine(line)
       await irc.handleLineEvents(ev)
       asyncCheck irc.handleEvent(irc, ev)
     else:
