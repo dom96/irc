@@ -209,7 +209,7 @@ proc isNumber(s: string): bool =
 proc parseMessage(msg: string): IrcEvent =
   result.typ       = EvMsg
   result.cmd       = MUnknown
-  result.tags      = newStringTable()  
+  result.tags      = newStringTable()
   result.raw       = msg
   result.timestamp = times.getTime()
   var i = 0
@@ -346,7 +346,7 @@ proc addNick(irc: Irc | AsyncIrc, chan, nick: string) =
   ## Adds ``nick`` to ``chan``'s user list.
   var stripped = nick
   # Strip common nick prefixes
-  if nick[0] in {'+', '@', '%', '!', '&', '~'}: stripped = nick[1 .. <nick.len]
+  if nick[0] in {'+', '@', '%', '!', '&', '~'}: stripped = nick[1 ..< nick.len]
 
   if chan notin irc.userList:
     irc.userList[chan] = UserList(finished: false, list: @[])
