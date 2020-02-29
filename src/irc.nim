@@ -326,7 +326,7 @@ proc newIrc*(address: string, port: Port = 6667.Port,
          realname = "NimBot", serverPass = "",
          joinChans: seq[string] = @[],
          msgLimit: bool = true,
-         ssl: bool = false,
+         useSsl: bool = false,
          sslContext = getDefaultSSL()): Irc =
   ## Creates a ``Irc`` object.
   new(result)
@@ -348,12 +348,12 @@ proc newIrc*(address: string, port: Port = 6667.Port,
   result.eventsQueue = initDeque[IrcEvent]()
 
   when defined(ssl):
-    if ssl:
+    if useSsl:
       try:
         sslContext.wrapSocket(result.sock)
       except:
         result.sock.close()
-        raise getCurrentException()
+        raise
 
 proc remNick(irc: Irc | AsyncIrc, chan, nick: string) =
   ## Removes ``nick`` from ``chan``'s user list.
@@ -590,7 +590,7 @@ proc newAsyncIrc*(address: string, port: Port = 6667.Port,
               realname = "NimBot", serverPass = "",
               joinChans: seq[string] = @[],
               msgLimit: bool = true,
-              ssl: bool = false,
+              useSsl: bool = false,
               sslContext = getDefaultSSL(),
               callback: proc (irc: AsyncIrc, ev: IrcEvent): Future[void]
               ): AsyncIrc =
@@ -619,12 +619,12 @@ proc newAsyncIrc*(address: string, port: Port = 6667.Port,
   result.userList = initTable[string, UserList]()
 
   when defined(ssl):
-    if ssl:
+    if useSsl:
       try:
         sslContext.wrapSocket(result.sock)
       except:
         result.sock.close()
-        raise getCurrentException()
+        raise
 
 proc run*(irc: AsyncIrc) {.async.} =
   ## Initiates the long-running event loop.
