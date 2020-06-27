@@ -231,7 +231,7 @@ proc parseMessage(msg: string): IrcEvent =
     var tags = ""
     i.inc msg.parseUntil(tags, {' '}, i)
     for tag in tags.split(';'):
-      var pair = tag.split('=') 
+      var pair = tag.split('=')
       result.tags[pair[0]] = pair[1]
     inc(i)
   # Process the prefix
@@ -358,9 +358,10 @@ proc newIrc*(address: string, port: Port = 6667.Port,
 proc remNick(irc: Irc | AsyncIrc, chan, nick: string) =
   ## Removes ``nick`` from ``chan``'s user list.
   var newList: seq[string] = @[]
-  for n in irc.userList[chan].list:
-    if n != nick:
-      newList.add n
+  if chan in irc.userList:
+    for n in irc.userList[chan].list:
+      if n != nick:
+        newList.add n
   irc.userList[chan].list = newList
 
 proc addNick(irc: Irc | AsyncIrc, chan, nick: string) =
@@ -369,6 +370,8 @@ proc addNick(irc: Irc | AsyncIrc, chan, nick: string) =
   # Strip common nick prefixes
   if nick[0] in {'+', '@', '%', '!', '&', '~'}: stripped = nick[1 ..< nick.len]
 
+  if chan notin irc.userList:
+    irc.userList[chan] = UserList(finished: false, list: @[])
   irc.userList[chan].list.add(stripped)
 
 proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
@@ -547,7 +550,8 @@ proc getNick*(irc: Irc | AsyncIrc): string =
 proc getUserList*(irc: Irc | AsyncIrc, channel: string): seq[string] =
   ## Returns the specified channel's user list. The specified channel should
   ## be in the form of ``#chan``.
-  return irc.userList[channel].list
+  if channel in irc.userList:
+    result = irc.userList[channel].list
 
 # -- Asyncio dispatcher
 
