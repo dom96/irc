@@ -1,11 +1,11 @@
 # Package
 
-version = "0.3.0"
-author = "Dominik Picheta"
+version = "1.0.0"
+author = "Dominik Picheta and KittyTechno"
 description = "IRC client module"
 license = "MIT"
 srcDir = "src"
 
 # Dependencies
 
-requires "nim >= 0.9.5"
+requires "nim >= 1.2.6"
