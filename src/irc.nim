@@ -31,6 +31,8 @@ include "system/inclrtl"
 
 import net, strutils, strtabs, parseutils, times, asyncdispatch, asyncnet
 import os, tables, deques
+import torim
+
 from nativesockets import Port
 export `[]`
 
@@ -55,12 +57,29 @@ type
     userList: Table[string, UserList]
   IrcBase*[T] = ref IrcBaseObj[T]
 
+  TorIrcBaseObj*[ProxySocket] = object
+    address: string
+    port: Port
+    nick, user, realname, serverPass: string
+    sock: ProxySocket
+    eventsQueue: Deque[IrcEvent]
+    status: Info
+    lastPing: float
+    lastPong: float
+    lag: float
+    channelsToJoin: seq[string]
+    msgLimit: bool
+    messageBuffer: seq[tuple[timeToSend: float, m: string]]
+    lastReconnect: float
+    userList: Table[string, UserList]
+  TorIrcBase*[T] = ref TorIrcBaseObj[T]
+
   UserList* = ref object
     list: seq[string]
     finished: bool
 
   Irc* = ref IrcBaseObj[Socket]
-
+  TorIrc* = ref TorIrcBaseObj[ProxySocket]
   AsyncIrc* = ref IrcBaseObj[AsyncSocket]
 
   IrcMType* = enum
@@ -115,7 +134,7 @@ when not defined(ssl):
   type SSLContext = ref object
 var defaultSslContext {.threadvar.}: SSLContext
 
-proc getDefaultSSL(): SSLContext =
+proc getDefaultSSL*(): SSLContext =
   result = defaultSslContext
   when defined(ssl):
     if result == nil:
@@ -123,7 +142,7 @@ proc getDefaultSSL(): SSLContext =
       result = defaultSslContext
       doAssert result != nil, "failure to initialize the SSL context"
 
-proc wasBuffered[T](irc: IrcBase[T], message: string,
+proc wasBuffered[T](irc: TorIrcBase[T] or IrcBase[T], message: string,
                     sendImmediately: bool): bool =
   result = true
   if irc.msgLimit and not sendImmediately:
@@ -134,7 +153,7 @@ proc wasBuffered[T](irc: IrcBase[T], message: string,
     irc.messageBuffer.add((timeToSend, message))
     result = false
 
-proc send*(irc: Irc, message: string, sendImmediately = false) =
+proc send*(irc: TorIrc or Irc, message: string, sendImmediately = false) =
   ## Sends ``message`` as a raw command. It adds ``\c\L`` for you.
   ##
   ## Buffering is performed automatically if you attempt to send messages too
@@ -159,7 +178,7 @@ proc send*(irc: AsyncIrc, message: string,
   result = newFuture[void]("irc.send")
   result.complete()
 
-proc privmsg*(irc: Irc, target, message: string) =
+proc privmsg*(irc: TorIrc or Irc, target, message: string) =
   ## Sends ``message`` to ``target``. ``Target`` can be a channel, or a user.
   irc.send("PRIVMSG $1 :$2" % [target, message])
 
@@ -168,7 +187,7 @@ proc privmsg*(irc: AsyncIrc, target, message: string): Future[void] =
   ## channel, or a user.
   result = irc.send("PRIVMSG $1 :$2" % [target, message])
 
-proc notice*(irc: Irc, target, message: string) =
+proc notice*(irc: TorIrc or Irc, target, message: string) =
   ## Sends ``notice`` to ``target``. ``Target`` can be a channel, or a user.
   irc.send("NOTICE $1 :$2" % [target, message])
 
@@ -177,7 +196,7 @@ proc notice*(irc: AsyncIrc, target, message: string): Future[void] =
   ## channel, or a user.
   result = irc.send("NOTICE $1 :$2" % [target, message])
 
-proc join*(irc: Irc, channel: string, key = "") =
+proc join*(irc: TorIrc or Irc, channel: string, key = "") =
   ## Joins ``channel``.
   ##
   ## If key is not ``""``, then channel is assumed to be key protected and this
@@ -197,7 +216,7 @@ proc join*(irc: AsyncIrc, channel: string, key = ""): Future[void] =
   else:
     result = irc.send("JOIN " & channel & " " & key)
 
-proc part*(irc: Irc, channel, message: string) =
+proc part*(irc: TorIrc or Irc, channel, message: string) =
   ## Leaves ``channel`` with ``message``.
   irc.send("PART " & channel & " :" & message)
 
@@ -205,7 +224,7 @@ proc part*(irc: AsyncIrc, channel, message: string): Future[void] =
   ## Leaves ``channel`` with ``message`` asynchronously.
   result = irc.send("PART " & channel & " :" & message)
 
-proc close*(irc: Irc | AsyncIrc) =
+proc close*(irc: TorIrc or Irc or AsyncIrc) =
   ## Closes connection to an IRC server.
   ##
   ## **Warning:** This procedure does not send a ``QUIT`` message to the server.
@@ -292,7 +311,7 @@ proc parseMessage(msg: string): IrcEvent =
     inc(i) # Skip `:`.
     result.params.add(msg[i..msg.len-1])
 
-proc connect*(irc: Irc) =
+proc connect*(irc: TorIrc or Irc) =
   ## Connects to an IRC server as specified by ``irc``.
   assert(irc.address != "")
   assert(irc.port != Port(0))
@@ -316,7 +335,23 @@ proc reconnect*(irc: Irc, timeout = 5000) =
   let secSinceReconnect = epochTime() - irc.lastReconnect
   if secSinceReconnect < (timeout/1000):
     sleep(timeout - (secSinceReconnect*1000).int)
+  
   irc.sock = newSocket()
+  irc.connect()
+  irc.lastReconnect = epochTime()
+
+proc reconnect*(irc: TorIrc, timeout = 5000) =
+  ## Reconnects to an IRC server.
+  ##
+  ## ``Timeout`` specifies the time to wait in miliseconds between multiple
+  ## consecutive reconnections.
+  ##
+  ## This should be used when an ``EvDisconnected`` event occurs.
+  let secSinceReconnect = epochTime() - irc.lastReconnect
+  if secSinceReconnect < (timeout/1000):
+    sleep(timeout - (secSinceReconnect*1000).int)
+  
+  irc.sock = newProxySocket()
   irc.connect()
   irc.lastReconnect = epochTime()
 
@@ -355,7 +390,47 @@ proc newIrc*(address: string, port: Port = 6667.Port,
         result.sock.close()
         raise
 
-proc remNick(irc: Irc | AsyncIrc, chan, nick: string) =
+
+proc newTorIrc*(address: string, port: Port = 6667.Port,
+        nick = "NimBot",
+        user = "NimBot",
+        realname = "NimBot", serverPass = "",
+        joinChans: seq[string] = @[],
+        msgLimit: bool = true,
+        useSsl: bool = false,
+        sslContext = getDefaultSSL()): TorIrc =
+  ## Creates a ``Irc`` object.
+  new(result)
+  result.address = address
+  result.port = port
+  result.nick = nick
+  result.user = user
+  result.realname = realname
+  result.serverPass = serverPass
+  result.lastPing = epochTime()
+  result.lastPong = -1.0
+  result.lag = -1.0
+  result.channelsToJoin = joinChans
+  result.msgLimit = msgLimit
+  result.messageBuffer = @[]
+  result.status = SockIdle
+  try:
+    result.sock = newProxySocket()
+  except Exception as e:
+    raise e
+  result.userList = initTable[string, UserList]()
+  result.eventsQueue = initDeque[IrcEvent]()
+
+  when defined(ssl):
+    if useSsl:
+      try:
+        sslContext.wrapSocket(result.sock)
+      except:
+        result.sock.close()
+        raise
+
+
+proc remNick(irc: TorIrc or Irc or AsyncIrc, chan, nick: string) =
   ## Removes ``nick`` from ``chan``'s user list.
   var newList: seq[string] = @[]
   if chan in irc.userList:
@@ -364,7 +439,7 @@ proc remNick(irc: Irc | AsyncIrc, chan, nick: string) =
         newList.add n
   irc.userList[chan].list = newList
 
-proc addNick(irc: Irc | AsyncIrc, chan, nick: string) =
+proc addNick(irc: TorIrc or Irc or AsyncIrc, chan, nick: string) =
   ## Adds ``nick`` to ``chan``'s user list.
   var stripped = nick
   # Strip common nick prefixes
@@ -374,7 +449,7 @@ proc addNick(irc: Irc | AsyncIrc, chan, nick: string) =
     irc.userList[chan] = UserList(finished: false, list: @[])
   irc.userList[chan].list.add(stripped)
 
-proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
+proc processLine(irc: TorIrc or Irc or AsyncIrc, line: string): IrcEvent =
   if line.len == 0:
     irc.close()
     result = IrcEvent(typ: EvDisconnected)
@@ -444,7 +519,23 @@ proc processLine(irc: Irc | AsyncIrc, line: string): IrcEvent =
       for chan in keys(irc.userList):
         irc.remNick(chan, result.nick)
 
-proc handleLineEvents(irc: Irc | AsyncIrc, ev: IrcEvent) {.multisync.} =
+proc handleLineEvents(irc: TorIrc or Irc, ev: IrcEvent) =
+  if ev.typ == EvMsg:
+    if ev.cmd == MPing:
+      irc.send("PONG " & ev.params[0])
+
+    if ev.cmd == MNumeric:
+      if ev.numeric == "001":
+        # Join channels.
+        for chan in items(irc.channelsToJoin):
+          irc.join(chan)
+
+        # Emit connected event.
+        var ev = IrcEvent(typ: EvConnected)
+        irc.eventsQueue.addLast(ev)
+
+
+proc handleLineEvents(irc: AsyncIrc, ev: IrcEvent) {.async.} =
   if ev.typ == EvMsg:
     if ev.cmd == MPing:
       await irc.send("PONG " & ev.params[0])
@@ -462,7 +553,8 @@ proc handleLineEvents(irc: Irc | AsyncIrc, ev: IrcEvent) {.multisync.} =
         else:
           asyncCheck irc.handleEvent(irc, ev)
 
-proc processOther(irc: Irc, ev: var IrcEvent): bool =
+
+proc processOther(irc: TorIrc or Irc, ev: var IrcEvent): bool =
   result = false
   if epochTime() - irc.lastPing >= 20.0:
     irc.lastPing = epochTime()
@@ -502,7 +594,7 @@ proc processOtherForever(irc: AsyncIrc) {.async.} =
         break # messageBuffer is guaranteed to be from the quickest to the
               # later-est.
 
-proc poll*(irc: Irc, ev: var IrcEvent,
+proc poll*(irc: TorIrc or Irc, ev: var IrcEvent,
            timeout: int = 500): bool =
   ## This function parses a single message from the IRC server and returns
   ## a IRCEvent.
@@ -533,21 +625,21 @@ proc poll*(irc: Irc, ev: var IrcEvent,
 
   if processOther(irc, ev): result = true
 
-proc getLag*(irc: Irc | AsyncIrc): float =
+proc getLag*(irc: TorIrc or Irc or AsyncIrc): float =
   ## Returns the latency between this client and the IRC server in seconds.
   ##
   ## If latency is unknown, returns -1.0.
   return irc.lag
 
-proc isConnected*(irc: Irc | AsyncIrc): bool =
+proc isConnected*(irc: TorIrc or Irc or AsyncIrc): bool =
   ## Returns whether this IRC client is connected to an IRC server.
   return irc.status == SockConnected
 
-proc getNick*(irc: Irc | AsyncIrc): string =
+proc getNick*(irc: TorIrc or Irc or AsyncIrc): string =
   ## Returns the current nickname of the client.
   return irc.nick
 
-proc getUserList*(irc: Irc | AsyncIrc, channel: string): seq[string] =
+proc getUserList*(irc: TorIrc or Irc or AsyncIrc, channel: string): seq[string] =
   ## Returns the specified channel's user list. The specified channel should
   ## be in the form of ``#chan``.
   if channel in irc.userList:
