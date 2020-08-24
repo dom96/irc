@@ -742,4 +742,3 @@ proc run*(irc: AsyncIrc) {.async.} =
       asyncCheck irc.handleEvent(irc, ev)
     else:
       await sleepAsync(500)
-
