@@ -1,7 +1,7 @@
 # Package
 
 version = "1.0.0"
-author = "Dominik Picheta and KittyTechno"
+author = "Dominik Picheta"
 description = "IRC client module"
 license = "MIT"
 srcDir = "src"
