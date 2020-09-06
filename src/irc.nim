@@ -33,11 +33,13 @@ import net, strutils, strtabs, parseutils, times, asyncdispatch, asyncnet
 import os, tables, deques
 from nativesockets import Port
 export `[]`
-
+export Port
 type
   IrcBaseObj*[SockType] = object
     address: string
     port: Port
+    proxyAddr: string
+    proxyPort: Port
     nick, user, realname, serverPass: string
     sock: SockType
     when SockType is AsyncSocket:
@@ -298,13 +300,38 @@ proc connect*(irc: Irc) =
   assert(irc.port != Port(0))
 
   irc.status = SockConnecting
-  irc.sock.connect(irc.address, irc.port)
+  if irc.proxyAddr != "":
+    var p = "  "
+    p[0] = cast[char](irc.port.uint16 shr 8)
+    p[1] = cast[char](irc.port)
+
+    # connect to proxy with not authentication
+    irc.sock.connect(irc.proxyAddr, irc.proxyPort)
+    irc.sock.send("\x05\x01\x00") # connect with no auth
+    let resp = irc.sock.recv(2, 1000)
+    if resp != "\x05\x00":
+      raise newException(Exception, "Unexpected proxy response: " & resp.toHex())
+
+    irc.sock.send("\x05\x01\x00\x03" & irc.address.len.char & irc.address & p)
+
+  else:
+    irc.sock.connect(irc.address, irc.port)
   irc.status = SockConnected
 
   # Greet the server :)
   if irc.serverPass != "": irc.send("PASS " & irc.serverPass, true)
   irc.send("NICK " & irc.nick, true)
   irc.send("USER $1 * 0 :$2" % [irc.user, irc.realname], true)
+
+
+# proc connect*(s: ProxySocket, address: string, port: Port) =
+#   ## Connect by FQDN/hostname or IP address
+#   ## echo repr port.uint16.toHex().fromHex()
+#   var p = "  "
+#   p[0] = cast[char](port.uint16 shr 8)
+#   p[1] = cast[char](port)
+
+#   s.inner.send("\x05\x01\x00\x03" & address.len.char & address & p)
 
 proc reconnect*(irc: Irc, timeout = 5000) =
   ## Reconnects to an IRC server.
@@ -320,10 +347,13 @@ proc reconnect*(irc: Irc, timeout = 5000) =
   irc.connect()
   irc.lastReconnect = epochTime()
 
+
+
 proc newIrc*(address: string, port: Port = 6667.Port,
          nick = "NimBot",
          user = "NimBot",
          realname = "NimBot", serverPass = "",
+         proxyAddr = "", proxyPort: Port = 0.Port,
          joinChans: seq[string] = @[],
          msgLimit: bool = true,
          useSsl: bool = false,
@@ -332,6 +362,8 @@ proc newIrc*(address: string, port: Port = 6667.Port,
   new(result)
   result.address = address
   result.port = port
+  result.proxyAddr = proxyAddr
+  result.proxyPort = proxyPort
   result.nick = nick
   result.user = user
   result.realname = realname
