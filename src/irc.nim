@@ -300,6 +300,7 @@ proc connect*(irc: Irc) =
   assert(irc.port != Port(0))
 
   irc.status = SockConnecting
+  # check if proxyAddr has been provided
   if irc.proxyAddr != "":
     var p = "  "
     p[0] = cast[char](irc.port.uint16 shr 8)
@@ -315,6 +316,7 @@ proc connect*(irc: Irc) =
     irc.sock.send("\x05\x01\x00\x03" & irc.address.len.char & irc.address & p)
 
   else:
+    # else no proxy connect normal
     irc.sock.connect(irc.address, irc.port)
   irc.status = SockConnected
 
