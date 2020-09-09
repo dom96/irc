@@ -20,8 +20,8 @@ proc onIrcEvent(client: AsyncIrc, event: IrcEvent) {.async.} =
             client.getUserList(event.origin).join("A-A"))
     echo(event.raw)
 
-var client = newAsyncIrc("lqm3k3sp7dmuaaozcsh6p4jwwy3jkjj4ykquvre5v4c4gt6liiovgkad.onion", nick="TestBot1234",
-                 proxyAddr="127.0.0.1", proxyPort=9050.Port, joinChans = @["#nim-offtopic"], callback = onIrcEvent)
+var client = newAsyncIrc("irc.freenode.net", nick="TestBot1234",
+                 proxyAddr="proxyaddress", proxyPort=<proxyport>.Port, joinChans = @["#nim-offtopic"], callback = onIrcEvent)
 asyncCheck client.run()
 
 runForever()
