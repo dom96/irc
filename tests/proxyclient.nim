@@ -1,5 +1,5 @@
 import irc, strutils
-var client = newIrc("<hiddenserviceaddrhere>.onion", nick="TestBot1234", proxyAddr="127.0.0.1",
+var client = newIrc("lqm3k3sp7dmuaaozcsh6p4jwwy3jkjj4ykquvre5v4c4gt6liiovgkad.onion", nick="TestBot1234", proxyAddr="127.0.0.1",
                 proxyPort=9050.Port,
                  joinChans = @["#nim-offtopic"])
 client.connect()
