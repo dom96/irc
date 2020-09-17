@@ -337,24 +337,7 @@ proc reconnect*(irc: Irc, timeout = 5000) =
   if secSinceReconnect < (timeout/1000):
     sleep(timeout - (secSinceReconnect*1000).int)
   irc.sock = newSocket()
-  # check if proxyAddr has been provided
-  if irc.proxyAddr != "":
-    var p = "  "
-    p[0] = char(irc.port.uint16 shr 8)
-    p[1] = cast[char](irc.port)
-
-    # connect to proxy with not authentication
-    irc.sock.connect(irc.proxyAddr, irc.proxyPort)
-    irc.sock.send("\x05\x01\x00") # connect with no auth
-    # get proxy response
-    let resp = irc.sock.recv(2)
-    if resp != "\x05\x00": # check the proxy response
-      raise newException(Exception, "Unexpected proxy response: " & resp.toHex())
-
-    irc.sock.send("\x05\x01\x00\x03" & irc.address.len.char & irc.address & p)
-
-  else:
-    irc.sock.connect(irc.address, irc.port)
+  irc.sock.connect(irc.address, irc.port)
   irc.lastReconnect = epochTime()
 
 proc newIrc*(address: string, port: Port = 6667.Port,
@@ -639,24 +622,7 @@ proc reconnect*(irc: AsyncIrc, timeout = 5000) {.async.} =
     await sleepAsync(timeout - int(secSinceReconnect * 1000))
   irc.sock.close()
   irc.sock = newAsyncSocket()
-    # check if proxyAddr has been provided
-  if irc.proxyAddr != "":
-    var p = "  "
-    p[0] = char(irc.port.uint16 shr 8)
-    p[1] = cast[char](irc.port)
-
-    # connect to proxy with not authentication
-    await irc.sock.connect(irc.proxyAddr, irc.proxyPort)
-    await irc.sock.send("\x05\x01\x00") # connect with no auth
-    # get proxy response
-    let resp = await irc.sock.recv(2)
-    if resp != "\x05\x00": # check the proxy response
-      raise newException(Exception, "Unexpected proxy response: " & resp.toHex())
-
-    await irc.sock.send("\x05\x01\x00\x03" & irc.address.len.char & irc.address & p)
-
-  else:
-    await irc.connect()
+  await irc.connect()
 
   irc.lastReconnect = epochTime()
 
