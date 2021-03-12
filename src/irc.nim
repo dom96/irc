@@ -12,17 +12,19 @@
 ##
 ## .. code-block:: Nim
 ##
-##   var client = irc("picheta.me", joinChans = @["#bots"])
+##   let client = newIrc("picheta.me", joinChans = @["#bots"])
 ##   client.connect()
 ##   while True:
 ##     var event: IrcEvent
 ##     if client.poll(event):
 ##       case event.typ
-##       of EvConnected: nil
+##       of EvConnected: discard
 ##       of EvDisconnected:
 ##         client.reconnect()
 ##       of EvMsg:
 ##         # Write your message reading code here.
+##         echo event.raw
+##      else: discard
 ##
 ## **Warning:** The API of this module is unstable, and therefore is subject
 ## to change.
