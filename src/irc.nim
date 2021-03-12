@@ -105,6 +105,7 @@ type
       params*: seq[string]  ## Parameters of the IRC message
       origin*: string       ## The channel/user that this msg originated from
       raw*: string          ## Raw IRC message
+      text*: string         ## Text intended for the recipient (the last value in params).
       timestamp*: Time      ## UNIX epoch time the message was received
 
   Info = enum
@@ -293,6 +294,9 @@ proc parseMessage(msg: string): IrcEvent =
   if i < msg.len and msg[i] == ':':
     inc(i) # Skip `:`.
     result.params.add(msg[i..msg.len-1])
+
+  if result.params.len > 0:
+    result.text = result.params[^1]
 
 proc connect*(irc: Irc) =
   ## Connects to an IRC server as specified by ``irc``.
