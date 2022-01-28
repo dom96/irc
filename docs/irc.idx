@@ -1,0 +1,50 @@
+IrcBaseObj	irc.html#IrcBaseObj	irc: IrcBaseObj	
+IrcBase	irc.html#IrcBase	irc: IrcBase	
+UserList	irc.html#UserList	irc: UserList	
+Irc	irc.html#Irc	irc: Irc	
+AsyncIrc	irc.html#AsyncIrc	irc: AsyncIrc	
+MUnknown	irc.html#MUnknown	IrcMType.MUnknown	
+MNumeric	irc.html#MNumeric	IrcMType.MNumeric	
+MPrivMsg	irc.html#MPrivMsg	IrcMType.MPrivMsg	
+MJoin	irc.html#MJoin	IrcMType.MJoin	
+MPart	irc.html#MPart	IrcMType.MPart	
+MMode	irc.html#MMode	IrcMType.MMode	
+MTopic	irc.html#MTopic	IrcMType.MTopic	
+MInvite	irc.html#MInvite	IrcMType.MInvite	
+MKick	irc.html#MKick	IrcMType.MKick	
+MQuit	irc.html#MQuit	IrcMType.MQuit	
+MNick	irc.html#MNick	IrcMType.MNick	
+MNotice	irc.html#MNotice	IrcMType.MNotice	
+MPing	irc.html#MPing	IrcMType.MPing	
+MPong	irc.html#MPong	IrcMType.MPong	
+MError	irc.html#MError	IrcMType.MError	
+IrcMType	irc.html#IrcMType	irc: IrcMType	
+EvMsg	irc.html#EvMsg	IrcEventType.EvMsg	
+EvConnected	irc.html#EvConnected	IrcEventType.EvConnected	
+EvDisconnected	irc.html#EvDisconnected	IrcEventType.EvDisconnected	
+EvTimeout	irc.html#EvTimeout	IrcEventType.EvTimeout	
+IrcEventType	irc.html#IrcEventType	irc: IrcEventType	
+IrcEvent	irc.html#IrcEvent	irc: IrcEvent	
+send	irc.html#send,Irc,string	irc: send(irc: Irc; message: string; sendImmediately = false)	
+send	irc.html#send,AsyncIrc,string	irc: send(irc: AsyncIrc; message: string; sendImmediately = false): Future[void]	
+privmsg	irc.html#privmsg,Irc,string,string	irc: privmsg(irc: Irc; target, message: string)	
+privmsg	irc.html#privmsg,AsyncIrc,string,string	irc: privmsg(irc: AsyncIrc; target, message: string): Future[void]	
+notice	irc.html#notice,Irc,string,string	irc: notice(irc: Irc; target, message: string)	
+notice	irc.html#notice,AsyncIrc,string,string	irc: notice(irc: AsyncIrc; target, message: string): Future[void]	
+join	irc.html#join,Irc,string,string	irc: join(irc: Irc; channel: string; key = &quot;&quot;)	
+join	irc.html#join,AsyncIrc,string,string	irc: join(irc: AsyncIrc; channel: string; key = &quot;&quot;): Future[void]	
+part	irc.html#part,Irc,string,string	irc: part(irc: Irc; channel, message: string)	
+part	irc.html#part,AsyncIrc,string,string	irc: part(irc: AsyncIrc; channel, message: string): Future[void]	
+close	irc.html#close	irc: close(irc: Irc | AsyncIrc)	
+connect	irc.html#connect,Irc	irc: connect(irc: Irc)	
+reconnect	irc.html#reconnect,Irc,int	irc: reconnect(irc: Irc; timeout = 5000)	
+newIrc	irc.html#newIrc,string,Port,string,string,string,string,seq[string],bool,bool	irc: newIrc(address: string; port: Port = 6667.Port; nick = &quot;NimBot&quot;;\n       user = &quot;NimBot&quot;; realname = &quot;NimBot&quot;; serverPass = &quot;&quot;;\n       joinChans: seq[string] = @[]; msgLimit: bool = true;\n       useSsl: bool = false; sslContext = getDefaultSSL()): Irc	
+poll	irc.html#poll,Irc,IrcEvent,int	irc: poll(irc: Irc; ev: var IrcEvent; timeout: int = 500): bool	
+getLag	irc.html#getLag	irc: getLag(irc: Irc | AsyncIrc): float	
+isConnected	irc.html#isConnected	irc: isConnected(irc: Irc | AsyncIrc): bool	
+getNick	irc.html#getNick	irc: getNick(irc: Irc | AsyncIrc): string	
+getUserList	irc.html#getUserList,,string	irc: getUserList(irc: Irc | AsyncIrc; channel: string): seq[string]	
+connect	irc.html#connect,AsyncIrc	irc: connect(irc: AsyncIrc): owned(Future[void])	
+reconnect	irc.html#reconnect,AsyncIrc,int	irc: reconnect(irc: AsyncIrc; timeout = 5000): owned(Future[void])	
+newAsyncIrc	irc.html#newAsyncIrc,string,Port,string,string,string,string,seq[string],bool,bool,proc(AsyncIrc,IrcEvent)	irc: newAsyncIrc(address: string; port: Port = 6667.Port; nick = &quot;NimBot&quot;;\n            user = &quot;NimBot&quot;; realname = &quot;NimBot&quot;; serverPass = &quot;&quot;;\n            joinChans: seq[string] = @[]; msgLimit: bool = true;\n            useSsl: bool = false; sslContext = getDefaultSSL();\n            callback: proc (irc: AsyncIrc; ev: IrcEvent): Future[void]): AsyncIrc	
+run	irc.html#run,AsyncIrc	irc: run(irc: AsyncIrc): owned(Future[void])	
