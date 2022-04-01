@@ -593,7 +593,7 @@ proc connect*(irc: AsyncIrc) {.async.} =
     await irc.send("AUTHENTICATE " & encodedpass)
     await irc.send("CAP END")
   else:
-    if irc.serverPass != "": irc.send("PASS " & irc.serverPass, true)
+    if irc.serverPass != "": await irc.send("PASS " & irc.serverPass, true)
     await irc.send("NICK " & irc.nick, true)
     await irc.send("USER $1 * 0 :$2" % [irc.user, irc.realname], true)
 
