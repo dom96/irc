@@ -33,6 +33,8 @@ include "system/inclrtl"
 
 import net, strutils, strtabs, parseutils, times, asyncdispatch, asyncnet
 import os, tables, deques
+import std/base64
+
 from nativesockets import Port
 export `[]`
 
@@ -40,7 +42,7 @@ type
   IrcBaseObj*[SockType] = object
     address: string
     port: Port
-    nick, user, realname, serverPass: string
+    nick, user, realname, serverPass, nickservPass: string
     sock: SockType
     when SockType is AsyncSocket:
       handleEvent: proc (irc: AsyncIrc, ev: IrcEvent): Future[void]
@@ -307,10 +309,19 @@ proc connect*(irc: Irc) =
   irc.sock.connect(irc.address, irc.port)
   irc.status = SockConnected
 
-  # Greet the server :)
-  if irc.serverPass != "": irc.send("PASS " & irc.serverPass, true)
-  irc.send("NICK " & irc.nick, true)
-  irc.send("USER $1 * 0 :$2" % [irc.user, irc.realname], true)
+  if irc.nickservPass != "": 
+    irc.send("CAP LS")
+    irc.send("NICK " & irc.nick, true)
+    irc.send("USER $1 * 0 :$2" % [irc.user, irc.realname], true)
+    irc.send("CAP REQ :multi-prefix sasl")
+    irc.send("AUTHENTICATE PLAIN")
+    let encodedpass = encode(char(0) &  irc.nick & char(0) & irc.nickservPass)
+    irc.send("AUTHENTICATE " & encodedpass)
+    irc.send("CAP END")
+  else:
+    if irc.serverPass != "": irc.send("PASS " & irc.serverPass, true)
+    irc.send("NICK " & irc.nick, true)
+    irc.send("USER $1 * 0 :$2" % [irc.user, irc.realname], true)
 
 proc reconnect*(irc: Irc, timeout = 5000) =
   ## Reconnects to an IRC server.
@@ -329,7 +340,7 @@ proc reconnect*(irc: Irc, timeout = 5000) =
 proc newIrc*(address: string, port: Port = 6667.Port,
          nick = "NimBot",
          user = "NimBot",
-         realname = "NimBot", serverPass = "",
+         realname = "NimBot", serverPass = "", nickservPass = "",
          joinChans: seq[string] = @[],
          msgLimit: bool = true,
          useSsl: bool = false,
@@ -342,6 +353,7 @@ proc newIrc*(address: string, port: Port = 6667.Port,
   result.user = user
   result.realname = realname
   result.serverPass = serverPass
+  result.nickservPass = nickservPass
   result.lastPing = epochTime()
   result.lastPong = -1.0
   result.lag = -1.0
@@ -571,9 +583,19 @@ proc connect*(irc: AsyncIrc) {.async.} =
   await irc.sock.connect(irc.address, irc.port)
   irc.status = SockConnected
 
-  if irc.serverPass != "": await irc.send("PASS " & irc.serverPass, true)
-  await irc.send("NICK " & irc.nick, true)
-  await irc.send("USER $1 * 0 :$2" % [irc.user, irc.realname], true)
+  if irc.nickservPass != "": 
+    await irc.send("CAP LS")
+    await irc.send("NICK " & irc.nick, true)
+    await irc.send("USER $1 * 0 :$2" % [irc.user, irc.realname], true)
+    await irc.send("CAP REQ :multi-prefix sasl")
+    await irc.send("AUTHENTICATE PLAIN")
+    let encodedpass = encode(char(0) &  irc.nick & char(0) & irc.nickservPass)
+    await irc.send("AUTHENTICATE " & encodedpass)
+    await irc.send("CAP END")
+  else:
+    if irc.serverPass != "": await irc.send("PASS " & irc.serverPass, true)
+    await irc.send("NICK " & irc.nick, true)
+    await irc.send("USER $1 * 0 :$2" % [irc.user, irc.realname], true)
 
 proc reconnect*(irc: AsyncIrc, timeout = 5000) {.async.} =
   ## Reconnects to an IRC server.
@@ -593,7 +615,7 @@ proc reconnect*(irc: AsyncIrc, timeout = 5000) {.async.} =
 proc newAsyncIrc*(address: string, port: Port = 6667.Port,
               nick = "NimBot",
               user = "NimBot",
-              realname = "NimBot", serverPass = "",
+              realname = "NimBot123", serverPass = "", nickservPass = "",
               joinChans: seq[string] = @[],
               msgLimit: bool = true,
               useSsl: bool = false,
@@ -613,6 +635,7 @@ proc newAsyncIrc*(address: string, port: Port = 6667.Port,
   result.user = user
   result.realname = realname
   result.serverPass = serverPass
+  result.nickservPass = nickservPass
   result.lastPing = epochTime()
   result.lastPong = -1.0
   result.lag = -1.0
