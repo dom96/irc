@@ -286,16 +286,17 @@ proc parseMessage(msg: string): IrcEvent =
   # Params
   result.params = @[]
   var param = ""
-  while i < msg.len and msg[i] != ':':
+  while i < msg.len:
     inc(i) # Skip ` `.
-    i.inc msg.parseUntil(param, {' ', ':', '\0'}, i)
-    if param != "":
-      result.params.add(param)
-      param.setlen(0)
-
-  if i < msg.len and msg[i] == ':':
-    inc(i) # Skip `:`.
-    result.params.add(msg[i..msg.len-1])
+    if msg[i] == ':':
+      inc(i) # Skip `:`.
+      result.params.add(msg[i..msg.len-1])
+      break
+    else:
+      i.inc msg.parseUntil(param, {' ', '\0'}, i)
+      if param != "":
+        result.params.add(param)
+        param.setlen(0)
 
   if result.params.len > 0:
     result.text = result.params[^1]
