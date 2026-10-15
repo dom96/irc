@@ -3,7 +3,7 @@ import irc, asyncdispatch, strutils
 proc onIrcEvent(client: AsyncIrc, event: IrcEvent) {.async.} =
   case event.typ
   of EvConnected:
-    nil
+    discard
   of EvDisconnected, EvTimeout:
     await client.reconnect()
   of EvMsg:

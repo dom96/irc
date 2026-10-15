@@ -103,6 +103,7 @@ type
       cmd*: IrcMType        ## Command (e.g. PRIVMSG)
       nick*, user*, host*, servername*: string
       numeric*: string      ## Only applies to ``MNumeric``
+      cmdText*: string      ## Command text (e.g. "PRIVMSG")
       tags*: StringTableRef ## IRCv3 tags at the start of the message
       params*: seq[string]  ## Parameters of the IRC message
       origin*: string       ## The channel/user that this msg originated from
@@ -112,9 +113,6 @@ type
 
   Info = enum
     SockConnected, SockConnecting, SockIdle, SockClosed
-
-{.deprecated: [TIrcBase: IrcBaseObj, TIrcMType: IrcMType,
-               TIrcEventType: IrcEventType, TIrcEvent: IrcEvent].}
 
 when not defined(ssl):
   type SSLContext = ref object
@@ -280,6 +278,8 @@ proc parseMessage(msg: string): IrcEvent =
     of "NOTICE": result.cmd = MNotice
     of "ERROR": result.cmd = MError
     else: result.cmd = MUnknown
+    
+    result.cmdText = cmd
 
   # Don't skip space here. It is skipped in the following While loop.
 
@@ -540,13 +540,13 @@ proc poll*(irc: Irc, ev: var IrcEvent,
   if not (irc.status == SockConnected):
     # Do not close the socket here, it is already closed!
     ev = IrcEvent(typ: EvDisconnected)
-  var line = TaintedString""
+  var line = ""
   try:
     irc.sock.readLine(line, timeout)
   except TimeoutError:
     result = false
   if result:
-    ev = irc.processLine(line.string)
+    ev = irc.processLine(line)
     handleLineEvents(irc, ev)
 
   if processOther(irc, ev): result = true
